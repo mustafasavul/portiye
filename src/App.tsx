@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useTheme } from "./theme";
+import {
+  CloseIcon,
+  MoonIcon,
+  RefreshIcon,
+  SortArrowIcon,
+  SunIcon,
+} from "./icons";
 
 type PortEntry = {
   pid: number;
@@ -8,32 +16,59 @@ type PortEntry = {
   detail: string;
   memory: number;
 };
+type Avd = { name: string; serial: string | null };
+type Simulator = { udid: string; name: string; state: string; runtime: string };
+
+/**
+ * Android emulators and iOS simulators carry the same shape — a name, a
+ * platform, one line of meta, a running flag, a start/stop action and a
+ * destructive reset. One row type renders both.
+ */
+type Device = {
+  id: string;
+  name: string;
+  platform: "Android" | "iOS";
+  meta: string;
+  running: boolean;
+  toggleLabel: string;
+  resetLabel: string;
+  toggle: () => Promise<void>;
+  reset: () => Promise<void>;
+  resetWarning: string;
+};
+
+type SortKey = "port" | "name" | "memory" | "pid";
+type Sort = { key: SortKey; dir: 1 | -1 };
+
+/** Memory reads descending — you open it to find the biggest hog. */
+const defaultDir = (key: SortKey): 1 | -1 => (key === "memory" ? -1 : 1);
 
 const mb = (bytes: number) =>
   bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(1)} GB`
     : `${Math.round(bytes / 1_048_576)} MB`;
-type Simulator = { udid: string; name: string; state: string; runtime: string };
-type Avd = { name: string; serial: string | null };
 
 export default function App() {
+  const [theme, setTheme] = useTheme();
   const [avds, setAvds] = useState<Avd[]>([]);
-  const [ports, setPorts] = useState<PortEntry[]>([]);
   const [sims, setSims] = useState<Simulator[]>([]);
-  const [showAllSims, setShowAllSims] = useState(false);
+  const [ports, setPorts] = useState<PortEntry[]>([]);
+  const [filter, setFilter] = useState("");
+  const [sort, setSort] = useState<Sort>({ key: "port", dir: 1 });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const filterRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     try {
-      const [a, p, s] = await Promise.all([
+      const [a, s, p] = await Promise.all([
         invoke<Avd[]>("list_avds"),
-        invoke<PortEntry[]>("get_listening_ports"),
         invoke<Simulator[]>("list_simulators"),
+        invoke<PortEntry[]>("get_listening_ports"),
       ]);
       setAvds(a);
-      setPorts(p);
       setSims(s);
+      setPorts(p);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -46,20 +81,23 @@ export default function App() {
     return () => clearInterval(id);
   }, [refresh]);
 
-  const avdAction = async (avd: Avd, wipe = false) => {
-    if (
-      wipe &&
-      !confirm(
-        `Wipe "${avd.name.replace(/_/g, " ")}"?\n` +
-          "All apps, data and snapshots are erased, then it cold boots.",
-      )
-    )
-      return;
-    setBusy(avd.name);
+  // ⌘K / ⌘F both jump to the filter — the one keyboard move a dev expects.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "f")) {
+        e.preventDefault();
+        filterRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  /** Runs an action with a busy lock, surfacing failures in the banner. */
+  const run = async (id: string, action: () => Promise<void>) => {
+    setBusy(id);
     try {
-      if (wipe) await invoke("wipe_avd", { name: avd.name, serial: avd.serial });
-      else if (avd.serial) await invoke("stop_avd", { serial: avd.serial });
-      else await invoke("launch_avd", { name: avd.name });
+      await action();
       await refresh();
     } catch (e) {
       setError(String(e));
@@ -68,215 +106,329 @@ export default function App() {
     }
   };
 
-  // One handler for boot/shutdown/erase — same shape, only the command differs.
-  const simAction = async (cmd: string, sim: Simulator) => {
-    if (
-      cmd === "erase_simulator" &&
-      !confirm(`Erase "${sim.name}"?\nAll apps, data and caches are wiped.`)
-    )
-      return;
-    setBusy(sim.udid);
-    try {
-      await invoke(cmd, { udid: sim.udid });
-      await refresh();
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setBusy(null);
-    }
-  };
+  const devices: Device[] = useMemo(() => {
+    const android: Device[] = avds.map((a) => ({
+      id: `avd:${a.name}`,
+      name: a.name.replace(/_/g, " "),
+      platform: "Android",
+      meta: a.serial ?? "emulator",
+      running: a.serial !== null,
+      toggleLabel: a.serial ? "Stop" : "Launch",
+      resetLabel: "Wipe",
+      resetWarning: "All apps, data and snapshots are erased, then it cold boots.",
+      toggle: () =>
+        a.serial
+          ? invoke("stop_avd", { serial: a.serial })
+          : invoke("launch_avd", { name: a.name }),
+      reset: () => invoke("wipe_avd", { name: a.name, serial: a.serial }),
+    }));
 
-  const kill = async (pid: number) => {
-    try {
-      await invoke("kill_process", { pid });
-      refresh();
-    } catch (e) {
-      setError(String(e));
-    }
-  };
+    const ios: Device[] = sims.map((s) => ({
+      id: `sim:${s.udid}`,
+      name: s.name,
+      platform: "iOS",
+      // The runtime already reads "iOS 26.3"; the platform column says iOS, so
+      // strip the prefix rather than printing it twice.
+      meta: s.runtime.replace(/^iOS\s*/, ""),
+      running: s.state === "Booted",
+      toggleLabel: s.state === "Booted" ? "Shutdown" : "Boot",
+      resetLabel: "Erase",
+      resetWarning: "All apps, data and caches are wiped.",
+      toggle: () =>
+        invoke(
+          s.state === "Booted" ? "shutdown_simulator" : "boot_simulator",
+          { udid: s.udid },
+        ),
+      reset: () => invoke("erase_simulator", { udid: s.udid }),
+    }));
+
+    // Running devices first — they are what you came here to act on.
+    return [...android, ...ios].sort(
+      (x, y) => Number(y.running) - Number(x.running),
+    );
+  }, [avds, sims]);
+
+  const runningCount = devices.filter((d) => d.running).length;
+
+  const visiblePorts = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    const rows = q
+      ? ports.filter((p) =>
+          `${p.port} ${p.name} ${p.detail}`.toLowerCase().includes(q),
+        )
+      : [...ports];
+
+    const { key, dir } = sort;
+    return rows.sort((a, b) =>
+      key === "name"
+        ? a.name.localeCompare(b.name) * dir || a.port - b.port
+        : (a[key] - b[key]) * dir,
+    );
+  }, [ports, filter, sort]);
+
+  /** Same column flips direction; a new column starts at its natural one. */
+  const toggleSort = (key: SortKey) =>
+    setSort((s) =>
+      s.key === key
+        ? { key, dir: (s.dir * -1) as 1 | -1 }
+        : { key, dir: defaultDir(key) },
+    );
 
   return (
-    <main className="min-h-screen bg-zinc-950 text-zinc-100 p-6">
-      <header className="flex items-baseline justify-between mb-6">
-        <h1 className="text-xl font-semibold tracking-tight">portiye</h1>
+    <div className="app">
+      <header className="toolbar">
+        <h1 className="wordmark">
+          portiye<span className="wordmark__dot">.</span>
+        </h1>
+
+        <div className="toolbar__spacer" />
+
+        <div className="field">
+          <input
+            ref={filterRef}
+            className="field__input"
+            type="search"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter ports"
+            aria-label="Filter ports by number, process or path"
+          />
+          <span className="field__kbd">⌘K</span>
+        </div>
+
         <button
+          className="btn btn--icon"
           onClick={refresh}
-          className="text-xs text-zinc-400 hover:text-zinc-100 transition"
+          aria-label="Refresh now"
+          title="Refresh now"
         >
-          Refresh
+          <RefreshIcon />
+        </button>
+
+        <button
+          className="btn btn--icon"
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+          title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+        >
+          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
         </button>
       </header>
 
       {error && (
-        <p className="mb-4 rounded-lg bg-red-950/60 border border-red-900 px-3 py-2 text-sm text-red-200">
-          {error}
+        <p className="banner" role="alert">
+          <span className="banner__text">{error}</span>
+          <button
+            className="btn btn--icon"
+            onClick={() => setError(null)}
+            aria-label="Dismiss error"
+          >
+            <CloseIcon />
+          </button>
         </p>
       )}
 
-      <section className="mb-8">
-        <h2 className="mb-3 text-xs uppercase tracking-widest text-zinc-500">
-          Android emulators
-        </h2>
-        {avds.length === 0 ? (
-          <Empty>No AVDs found. Create one in Android Studio.</Empty>
-        ) : (
-          <ul className="grid gap-2 sm:grid-cols-2">
-            {avds.map((avd) => (
-              <li
-                key={avd.name}
-                className="flex items-center gap-3 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3 hover:border-zinc-700 transition"
-              >
-                <span
-                  className={`h-2 w-2 shrink-0 rounded-full ${
-                    avd.serial ? "bg-emerald-400" : "bg-zinc-700"
-                  }`}
+      <section className="panel">
+        <div className="panel__head">
+          <h2 className="panel__title">Devices</h2>
+          <span className="panel__count">
+            {runningCount} / {devices.length} running
+          </span>
+        </div>
+        <div className="panel__body">
+          {devices.length === 0 ? (
+            <p className="empty">
+              No emulators or simulators found. Create one in Android Studio, or
+              install Xcode for iOS devices.
+            </p>
+          ) : (
+            <ul className="devices">
+              {devices.map((d) => (
+                <DeviceRow
+                  key={d.id}
+                  device={d}
+                  busy={busy === d.id}
+                  onToggle={() => run(d.id, d.toggle)}
+                  onReset={() => {
+                    if (confirm(`Reset “${d.name}”?\n${d.resetWarning}`))
+                      run(d.id, d.reset);
+                  }}
                 />
-                <span className="flex-1 truncate text-sm">
-                  {avd.name.replace(/_/g, " ")}
-                  {avd.serial && (
-                    <span className="ml-2 text-xs text-zinc-500">{avd.serial}</span>
-                  )}
-                </span>
-                <button
-                  disabled={busy === avd.name}
-                  onClick={() => avdAction(avd)}
-                  className={`rounded-lg px-3 py-1 text-xs font-medium disabled:opacity-50 transition ${
-                    avd.serial
-                      ? "border border-zinc-700 hover:bg-zinc-800"
-                      : "bg-emerald-600 hover:bg-emerald-500"
-                  }`}
-                >
-                  {busy === avd.name ? "…" : avd.serial ? "Stop" : "Launch"}
-                </button>
-                <button
-                  disabled={busy === avd.name}
-                  onClick={() => avdAction(avd, true)}
-                  className="rounded-lg border border-red-900 px-2 py-1 text-xs text-red-300 hover:bg-red-900/40 disabled:opacity-50 transition"
-                >
-                  Wipe
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="mb-8">
-        <div className="mb-3 flex items-baseline justify-between">
-          <h2 className="text-xs uppercase tracking-widest text-zinc-500">
-            iOS simulators
-          </h2>
-          {sims.length > 0 && (
-            <button
-              onClick={() => setShowAllSims((v) => !v)}
-              className="text-xs text-zinc-500 hover:text-zinc-200 transition"
-            >
-              {showAllSims ? "Only running" : `Show all (${sims.length})`}
-            </button>
+              ))}
+            </ul>
           )}
         </div>
-        {(() => {
-          const visible = showAllSims
-            ? sims
-            : sims.filter((s) => s.state === "Booted");
-          if (visible.length === 0)
-            return (
-              <Empty>
-                {sims.length === 0
-                  ? "No simulators (Xcode not installed?)."
-                  : "No running simulators."}
-              </Empty>
-            );
-          return (
-            <ul className="divide-y divide-zinc-800 rounded-xl border border-zinc-800 overflow-hidden">
-              {visible.map((s) => {
-                const booted = s.state === "Booted";
-                return (
-                  <li
-                    key={s.udid}
-                    className="flex items-center gap-3 bg-zinc-900/40 px-4 py-2 text-sm"
-                  >
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${
-                        booted ? "bg-emerald-400" : "bg-zinc-700"
-                      }`}
-                    />
-                    <span className="flex-1 truncate">{s.name}</span>
-                    <span className="text-xs text-zinc-500">{s.runtime}</span>
-                    <button
-                      disabled={busy === s.udid}
-                      onClick={() =>
-                        simAction(
-                          booted ? "shutdown_simulator" : "boot_simulator",
-                          s,
-                        )
-                      }
-                      className="rounded-lg border border-zinc-700 px-2 py-0.5 text-xs hover:bg-zinc-800 disabled:opacity-50 transition"
-                    >
-                      {booted ? "Shutdown" : "Boot"}
-                    </button>
-                    <button
-                      disabled={busy === s.udid}
-                      onClick={() => simAction("erase_simulator", s)}
-                      className="rounded-lg border border-red-900 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/40 disabled:opacity-50 transition"
-                    >
-                      Erase
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          );
-        })()}
       </section>
 
-      <section>
-        <h2 className="mb-3 text-xs uppercase tracking-widest text-zinc-500">
-          Listening ports
-        </h2>
-        {ports.length === 0 ? (
-          <Empty>Nothing listening.</Empty>
-        ) : (
-          <ul className="divide-y divide-zinc-800 rounded-xl border border-zinc-800 overflow-hidden">
-            {ports.map((p) => (
-              <li
-                key={`${p.pid}:${p.port}`}
-                className="flex items-center gap-3 bg-zinc-900/40 px-4 py-2 text-sm"
-              >
-                <span className="w-16 shrink-0 font-mono text-emerald-400">
-                  :{p.port}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate">{p.name}</span>
-                  {p.detail && (
-                    <span className="block truncate text-xs text-zinc-500">
-                      {p.detail}
-                    </span>
-                  )}
-                </span>
-                <span className="w-16 shrink-0 text-right font-mono text-xs text-zinc-400">
-                  {mb(p.memory)}
-                </span>
-                <span className="font-mono text-xs text-zinc-600">{p.pid}</span>
-                <button
-                  onClick={() => kill(p.pid)}
-                  className="rounded-lg border border-red-900 px-2 py-0.5 text-xs text-red-300 hover:bg-red-900/40 transition"
-                >
-                  Kill
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <section className="panel panel--fill">
+        <div className="panel__head">
+          <h2 className="panel__title">Listening ports</h2>
+          <span className="panel__count">
+            {filter ? `${visiblePorts.length} / ${ports.length}` : ports.length}
+          </span>
+        </div>
+        <div className="panel__scroll">
+          {visiblePorts.length === 0 ? (
+            <p className="empty">
+              {ports.length === 0 ? (
+                "Nothing is listening on this machine."
+              ) : (
+                <>
+                  No port matches “{filter}”.
+                  <button
+                    className="btn empty__action"
+                    onClick={() => setFilter("")}
+                  >
+                    Clear filter
+                  </button>
+                </>
+              )}
+            </p>
+          ) : (
+            <>
+              <div className="ports__head">
+                <SortHead sort={sort} onSort={toggleSort} k="port" cell="port__number">
+                  Port
+                </SortHead>
+                <SortHead sort={sort} onSort={toggleSort} k="name" cell="port__text">
+                  Process
+                </SortHead>
+                <SortHead sort={sort} onSort={toggleSort} k="memory" cell="port__mem">
+                  Memory
+                </SortHead>
+                <SortHead sort={sort} onSort={toggleSort} k="pid" cell="port__pid">
+                  PID
+                </SortHead>
+                <span className="port__action" aria-hidden="true" />
+              </div>
+              <ul className="ports">
+              {visiblePorts.map((p) => (
+                <li className="port" key={`${p.pid}:${p.port}`}>
+                  <span className="port__number">:{p.port}</span>
+                  <span className="port__text">
+                    <span className="port__name">{p.name}</span>
+                    {p.detail && (
+                      <span className="port__detail" title={p.detail}>
+                        {p.detail}
+                      </span>
+                    )}
+                  </span>
+                  <span className="port__mem">{mb(p.memory)}</span>
+                  <span className="port__pid">{p.pid}</span>
+                  <span className="port__action">
+                    <button
+                      className="btn btn--danger"
+                      disabled={busy === `port:${p.pid}`}
+                      aria-busy={busy === `port:${p.pid}`}
+                      onClick={() =>
+                        run(`port:${p.pid}`, () =>
+                          invoke("kill_process", { pid: p.pid }),
+                        )
+                      }
+                    >
+                      {busy === `port:${p.pid}` ? "…" : "Kill"}
+                    </button>
+                  </span>
+                </li>
+              ))}
+              </ul>
+            </>
+          )}
+        </div>
       </section>
-    </main>
+    </div>
   );
 }
 
-function Empty({ children }: { children: React.ReactNode }) {
+/**
+ * A column header that sorts. The direction lives in the arrow's rotation and
+ * in the accessible name, so it never depends on the glyph alone.
+ */
+function SortHead({
+  sort,
+  onSort,
+  k,
+  cell,
+  children,
+}: {
+  sort: Sort;
+  onSort: (k: SortKey) => void;
+  k: SortKey;
+  cell: string;
+  children: string;
+}) {
+  const active = sort.key === k;
+  const next = active
+    ? sort.dir === 1
+      ? "descending"
+      : "ascending"
+    : defaultDir(k) === 1
+      ? "ascending"
+      : "descending";
+
   return (
-    <p className="rounded-xl border border-dashed border-zinc-800 px-4 py-6 text-center text-sm text-zinc-500">
-      {children}
-    </p>
+    <span className={cell}>
+      <button
+        className="sort"
+        data-active={active || undefined}
+        data-dir={active && sort.dir === -1 ? "desc" : undefined}
+        onClick={() => onSort(k)}
+        aria-label={`Sort by ${children.toLowerCase()}, ${next}`}
+      >
+        {children}
+        <SortArrowIcon />
+      </button>
+    </span>
+  );
+}
+
+function DeviceRow({
+  device,
+  busy,
+  onToggle,
+  onReset,
+}: {
+  device: Device;
+  busy: boolean;
+  onToggle: () => void;
+  onReset: () => void;
+}) {
+  return (
+    <li className={device.running ? "device device--live" : "device"}>
+      <span
+        className={device.running ? "dot dot--live" : "dot"}
+        aria-hidden="true"
+      />
+      <span className="device__text">
+        <span className="device__name" title={device.name}>
+          {device.name}
+        </span>
+        <span className="device__meta">
+          {device.platform}
+          <span aria-hidden="true">·</span>
+          {/* Running state is carried by the dot and the button label, so the
+              meta line stays purely identifying. */}
+          <span>{device.meta}</span>
+        </span>
+      </span>
+      <span className="device__actions">
+        <button
+          className={device.running ? "btn" : "btn btn--primary"}
+          disabled={busy}
+          aria-busy={busy}
+          onClick={onToggle}
+        >
+          {busy ? "…" : device.toggleLabel}
+        </button>
+        <button
+          className="btn btn--danger"
+          disabled={busy}
+          aria-busy={busy}
+          onClick={onReset}
+        >
+          {device.resetLabel}
+        </button>
+      </span>
+    </li>
   );
 }
