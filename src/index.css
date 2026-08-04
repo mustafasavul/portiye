@@ -428,12 +428,35 @@ body {
 }
 
 .port__number {
-  flex: 0 0 4.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  flex: 0 0 5.5rem;
   font-family: var(--font-mono);
   font-size: var(--text-sm);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--color-accent);
+}
+
+/* "+2" — this process holds two more ports; the title lists them all. */
+.port__more {
+  padding: 0 var(--space-3xs);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+}
+
+/* A child row is a process spawned by the row above it. */
+.port--child .port__text {
+  padding-left: var(--space-md);
+}
+
+.port__branch {
+  margin-right: var(--space-2xs);
+  font-family: var(--font-mono);
+  color: var(--color-muted);
 }
 
 .port__text {
@@ -564,7 +587,7 @@ body {
   /* Narrower fixed widths, not `auto` — the header row has to stay aligned
    * with the data rows, so both keep a fixed track. */
   .port__number {
-    flex: 0 0 3.5rem;
+    flex: 0 0 4.25rem;
   }
 
   /* Wide enough for the "MEMORY" header label — a flex item cannot shrink

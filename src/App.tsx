@@ -15,7 +15,20 @@ type PortEntry = {
   name: string;
   detail: string;
   memory: number;
+  family: number;
 };
+
+/** One process, with every port it holds. */
+type Proc = {
+  pid: number;
+  name: string;
+  detail: string;
+  memory: number;
+  ports: number[];
+};
+
+/** A process and its listening descendants — `emulator` + the `qemu` it spawned. */
+type Family = { root: Proc; children: Proc[] };
 type Avd = { name: string; serial: string | null };
 type Simulator = { udid: string; name: string; state: string; runtime: string };
 
@@ -150,21 +163,71 @@ export default function App() {
 
   const runningCount = devices.filter((d) => d.running).length;
 
-  const visiblePorts = useMemo(() => {
+  /**
+   * Collapse the flat port list into families: one row per process (carrying
+   * all of its ports), nested under the topmost listening ancestor. Three
+   * `qemu` rows on 5554/5555/8554 are one process, and that process belongs to
+   * the emulator that spawned it — showing them as six unrelated rows was the
+   * noise.
+   */
+  const families = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const rows = q
       ? ports.filter((p) =>
           `${p.port} ${p.name} ${p.detail}`.toLowerCase().includes(q),
         )
-      : [...ports];
+      : ports;
 
-    const { key, dir } = sort;
-    return rows.sort((a, b) =>
-      key === "name"
-        ? a.name.localeCompare(b.name) * dir || a.port - b.port
-        : (a[key] - b[key]) * dir,
+    const procs = new Map<number, Proc & { family: number }>();
+    for (const p of rows) {
+      const existing = procs.get(p.pid);
+      if (existing) existing.ports.push(p.port);
+      else
+        procs.set(p.pid, {
+          pid: p.pid,
+          name: p.name,
+          detail: p.detail,
+          memory: p.memory,
+          ports: [p.port],
+          family: p.family,
+        });
+    }
+    for (const proc of procs.values()) proc.ports.sort((a, b) => a - b);
+
+    const grouped = new Map<number, Family>();
+    for (const proc of [...procs.values()].sort((a, b) => a.pid - b.pid)) {
+      // A filter can hide the root; then the survivor heads its own family.
+      const rootId = procs.has(proc.family) ? proc.family : proc.pid;
+      const family = grouped.get(rootId);
+      if (!family) grouped.set(rootId, { root: proc, children: [] });
+      else if (proc.pid === rootId)
+        grouped.set(rootId, { root: proc, children: family.children });
+      else family.children.push(proc);
+    }
+
+    const weight = (f: Family) => {
+      const all = [f.root, ...f.children];
+      switch (sort.key) {
+        case "memory":
+          return all.reduce((sum, p) => sum + p.memory, 0);
+        case "pid":
+          return f.root.pid;
+        default:
+          return Math.min(...all.flatMap((p) => p.ports));
+      }
+    };
+
+    return [...grouped.values()].sort((a, b) =>
+      sort.key === "name"
+        ? a.root.name.localeCompare(b.root.name) * sort.dir
+        : (weight(a) - weight(b)) * sort.dir,
     );
   }, [ports, filter, sort]);
+
+  const visibleCount = families.reduce(
+    (n, f) => n + [f.root, ...f.children].reduce((m, p) => m + p.ports.length, 0),
+    0,
+  );
 
   /** Same column flips direction; a new column starts at its natural one. */
   const toggleSort = (key: SortKey) =>
@@ -264,11 +327,11 @@ export default function App() {
         <div className="panel__head">
           <h2 className="panel__title">Listening ports</h2>
           <span className="panel__count">
-            {filter ? `${visiblePorts.length} / ${ports.length}` : ports.length}
+            {filter ? `${visibleCount} / ${ports.length}` : ports.length}
           </span>
         </div>
         <div className="panel__scroll">
-          {visiblePorts.length === 0 ? (
+          {families.length === 0 ? (
             <p className="empty">
               {ports.length === 0 ? (
                 "Nothing is listening on this machine."
@@ -302,41 +365,83 @@ export default function App() {
                 <span className="port__action" aria-hidden="true" />
               </div>
               <ul className="ports">
-              {visiblePorts.map((p) => (
-                <li className="port" key={`${p.pid}:${p.port}`}>
-                  <span className="port__number">:{p.port}</span>
-                  <span className="port__text">
-                    <span className="port__name">{p.name}</span>
-                    {p.detail && (
-                      <span className="port__detail" title={p.detail}>
-                        {p.detail}
-                      </span>
-                    )}
-                  </span>
-                  <span className="port__mem">{mb(p.memory)}</span>
-                  <span className="port__pid">{p.pid}</span>
-                  <span className="port__action">
-                    <button
-                      className="btn btn--danger"
-                      disabled={busy === `port:${p.pid}`}
-                      aria-busy={busy === `port:${p.pid}`}
-                      onClick={() =>
-                        run(`port:${p.pid}`, () =>
-                          invoke("kill_process", { pid: p.pid }),
+                {families.map((f) =>
+                  [f.root, ...f.children].map((proc, i) => (
+                    <ProcRow
+                      key={proc.pid}
+                      proc={proc}
+                      child={i > 0}
+                      busy={busy === `port:${proc.pid}`}
+                      onKill={() =>
+                        run(`port:${proc.pid}`, () =>
+                          invoke("kill_process", { pid: proc.pid }),
                         )
                       }
-                    >
-                      {busy === `port:${p.pid}` ? "…" : "Kill"}
-                    </button>
-                  </span>
-                </li>
-              ))}
+                    />
+                  )),
+                )}
               </ul>
             </>
           )}
         </div>
       </section>
     </div>
+  );
+}
+
+/**
+ * One process. Extra ports collapse into a `+n` chip rather than repeating the
+ * row, so the fixed column widths (and the sortable header) stay aligned.
+ */
+function ProcRow({
+  proc,
+  child,
+  busy,
+  onKill,
+}: {
+  proc: Proc;
+  child: boolean;
+  busy: boolean;
+  onKill: () => void;
+}) {
+  const [first, ...rest] = proc.ports;
+  const allPorts = proc.ports.map((p) => `:${p}`).join(", ");
+
+  return (
+    <li className={child ? "port port--child" : "port"}>
+      <span className="port__number" title={rest.length ? allPorts : undefined}>
+        :{first}
+        {rest.length > 0 && <span className="port__more">+{rest.length}</span>}
+      </span>
+      <span className="port__text">
+        <span className="port__name">
+          {child && (
+            <span className="port__branch" aria-hidden="true">
+              ↳
+            </span>
+          )}
+          {proc.name}
+        </span>
+        {proc.detail && (
+          <span className="port__detail" title={proc.detail}>
+            {proc.detail}
+          </span>
+        )}
+      </span>
+      <span className="port__mem">{mb(proc.memory)}</span>
+      <span className="port__pid">{proc.pid}</span>
+      <span className="port__action">
+        <button
+          className="btn btn--danger"
+          disabled={busy}
+          aria-busy={busy}
+          onClick={onKill}
+          aria-label={`Kill ${proc.name} on ${allPorts}`}
+        >
+          {busy ? "…" : "Kill"}
+        </button>
+      </span>
+    </li>
   );
 }
 

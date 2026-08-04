@@ -5,6 +5,7 @@
 //! on every OS (lsof truncates COMMAND, Windows `netstat` has no name at all).
 
 use serde::Serialize;
+use std::collections::{HashMap, HashSet};
 use std::process::Command;
 use sysinfo::{Pid, System};
 
@@ -18,6 +19,37 @@ pub struct PortEntry {
     pub detail: String,
     /// Resident set size in bytes (0 when the process vanished mid-scan).
     pub memory: u64,
+    /// PID of the highest ancestor that is *also* listening, or this PID when
+    /// the process has no listening ancestor. Rows sharing a family belong to
+    /// one tree — `emulator` spawning `qemu`, `adb` spawning its server.
+    pub family: u32,
+}
+
+/// Walk up the process tree and return the topmost ancestor that also holds a
+/// listening socket. Falls back to `pid` itself when nothing above it listens.
+///
+/// `parent_of` only has to cover the ancestry chain, not the whole system.
+fn family_root(
+    pid: u32,
+    parent_of: &HashMap<u32, u32>,
+    listeners: &HashSet<u32>,
+) -> u32 {
+    let mut cur = pid;
+    let mut root = pid;
+    let mut seen = HashSet::from([pid]);
+    loop {
+        let Some(&parent) = parent_of.get(&cur) else { break };
+        // Stop on 0, self, or a revisit — a cycle must yield one stable answer,
+        // not an answer that depends on how many times we went round.
+        if parent == 0 || !seen.insert(parent) {
+            break;
+        }
+        if listeners.contains(&parent) {
+            root = parent; // keep climbing — we want the *topmost* listener
+        }
+        cur = parent;
+    }
+    root
 }
 
 /// `$HOME` on unix, `%USERPROFILE%` on Windows.
@@ -153,6 +185,29 @@ pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
 
     let sys = System::new_all();
     let home = home_dir();
+
+    // Ancestry of every listener, walked once up front so `family_root` is a
+    // pure lookup rather than a repeated system query.
+    let listeners: HashSet<u32> = pairs.iter().map(|(pid, _)| *pid).collect();
+    let mut parent_of: HashMap<u32, u32> = HashMap::new();
+    for &pid in &listeners {
+        let mut cur = pid;
+        for _ in 0..64 {
+            let Some(parent) = sys
+                .process(Pid::from_u32(cur))
+                .and_then(|p| p.parent())
+                .map(|p| p.as_u32())
+            else {
+                break;
+            };
+            if parent == 0 || parent == cur || parent_of.contains_key(&cur) {
+                break;
+            }
+            parent_of.insert(cur, parent);
+            cur = parent;
+        }
+    }
+
     let mut entries: Vec<PortEntry> = pairs
         .into_iter()
         .map(|(pid, port)| {
@@ -177,6 +232,7 @@ pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
                     .unwrap_or_else(|| "unknown".into()),
                 detail: detail_for(&argv, cwd.as_deref(), home.as_deref()),
                 memory: proc.map(|p| p.memory()).unwrap_or(0),
+                family: family_root(pid, &parent_of, &listeners),
             }
         })
         .collect();
@@ -232,6 +288,25 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
             "~/Projects/portiye"
         );
         assert_eq!(detail_for("launchd", Some("/"), None), "");
+    }
+
+    #[test]
+    fn family_root_climbs_to_the_topmost_listener() {
+        // emulator(10) -> qemu(20) -> helper(30); 40 is unrelated.
+        // 15 sits between 10 and 20 but listens on nothing.
+        let parents = HashMap::from([(30, 20), (20, 15), (15, 10), (10, 1), (40, 1)]);
+        let listeners = HashSet::from([10, 20, 30, 40]);
+
+        assert_eq!(family_root(30, &parents, &listeners), 10);
+        assert_eq!(family_root(20, &parents, &listeners), 10);
+        assert_eq!(family_root(10, &parents, &listeners), 10, "root is its own family");
+        assert_eq!(family_root(40, &parents, &listeners), 40, "unrelated stays alone");
+    }
+
+    #[test]
+    fn family_root_survives_a_parent_cycle() {
+        let parents = HashMap::from([(1, 2), (2, 1)]);
+        assert_eq!(family_root(1, &parents, &HashSet::from([1, 2])), 2);
     }
 
     #[test]
