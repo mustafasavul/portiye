@@ -13,8 +13,11 @@
     "windows": [
       {
         "title": "portiye",
-        "width": 800,
-        "height": 600
+        "width": 1180,
+        "height": 800,
+        "minWidth": 560,
+        "minHeight": 420,
+        "center": true
       }
     ],
     "security": {

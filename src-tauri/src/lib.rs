@@ -1,4 +1,5 @@
 mod avd;
+mod export;
 mod ports;
 mod runtimes;
 mod sim;
@@ -11,14 +12,19 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             ports::get_listening_ports,
             ports::kill_process,
+            ports::kill_processes,
+            ports::kill_processes_elevated,
             avd::list_avds,
             avd::launch_avd,
             avd::stop_avd,
             avd::wipe_avd,
+            avd::restart_avd,
             sim::list_simulators,
             sim::boot_simulator,
             sim::shutdown_simulator,
             sim::erase_simulator,
+            sim::restart_simulator,
+            export::export_snapshot,
             runtimes::list_runtimes,
             runtimes::runtime_action,
         ])

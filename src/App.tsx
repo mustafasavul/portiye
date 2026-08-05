@@ -1,78 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTheme } from "./theme";
-import {
-  CloseIcon,
-  MoonIcon,
-  RefreshIcon,
-  SortArrowIcon,
-  SunIcon,
-} from "./icons";
-
-type PortEntry = {
-  pid: number;
-  port: number;
-  name: string;
-  detail: string;
-  memory: number;
-  family: number;
-};
-
-/** One process, with every port it holds. */
-type Proc = {
-  pid: number;
-  name: string;
-  detail: string;
-  memory: number;
-  ports: number[];
-};
-
-/** A process and its listening descendants — `emulator` + the `qemu` it spawned. */
-type Family = { root: Proc; children: Proc[] };
-type Avd = { name: string; serial: string | null };
-type Simulator = { udid: string; name: string; state: string; runtime: string };
-
-/** Docker containers, Ollama models, JVM build daemons — whatever is present. */
-type RuntimeItem = {
-  id: string;
-  kind: string;
-  name: string;
-  meta: string;
-  running: boolean;
-  can_start: boolean;
-  can_stop: boolean;
-  can_remove: boolean;
-};
-
-/**
- * Emulators, simulators, containers, models and build daemons all carry the
- * same shape — a name, a platform label, one line of meta, a running flag, a
- * start/stop action and sometimes a destructive one. One row type renders all
- * of them; an action the source cannot perform is simply null.
- */
-type Device = {
-  id: string;
-  name: string;
-  platform: string;
-  meta: string;
-  running: boolean;
-  toggleLabel: string;
-  toggle: (() => Promise<void>) | null;
-  reset: (() => Promise<void>) | null;
-  resetLabel: string;
-  resetWarning: string;
-};
-
-type SortKey = "port" | "name" | "memory" | "pid";
-type Sort = { key: SortKey; dir: 1 | -1 };
-
-/** Memory reads descending — you open it to find the biggest hog. */
-const defaultDir = (key: SortKey): 1 | -1 => (key === "memory" ? -1 : 1);
-
-const mb = (bytes: number) =>
-  bytes >= 1_073_741_824
-    ? `${(bytes / 1_073_741_824).toFixed(1)} GB`
-    : `${Math.round(bytes / 1_048_576)} MB`;
+import { warningFor } from "./risk";
+import { runtimeOf } from "./runtime";
+import { useConfirm } from "./Confirm";
+import { usePersisted } from "./hooks/usePersisted";
+import { useShortcuts } from "./hooks/useShortcuts";
+import { Toolbar } from "./components/Toolbar";
+import { DevicePanel } from "./components/DevicePanel";
+import { FastKill } from "./components/FastKill";
+import { PortTable, SortHead } from "./components/PortTable";
+import { CloseIcon } from "./icons";
+import { defaultDir, mb } from "./types";
+import type {
+  Avd,
+  Device,
+  Family,
+  KillGroup,
+  KillReport,
+  PortEntry,
+  Proc,
+  RuntimeItem,
+  Simulator,
+  Sort,
+  SortKey,
+} from "./types";
 
 export default function App() {
   const [theme, setTheme] = useTheme();
@@ -82,9 +35,18 @@ export default function App() {
   const [ports, setPorts] = useState<PortEntry[]>([]);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "port", dir: 1 });
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; path?: string } | null>(
+    null,
+  );
   const [busy, setBusy] = useState<string | null>(null);
   const filterRef = useRef<HTMLInputElement>(null);
+  const [ask, confirmDialog] = useConfirm();
+
+  const [savedFilters, setSavedFilters] = usePersisted<string[]>("filters", []);
+  const [format, setFormat] = usePersisted<"json" | "csv">("format", "json");
+  const [memoryWarnMb, setMemoryWarnMb] = usePersisted("memoryWarnMb", 500);
 
   const refresh = useCallback(async () => {
     try {
@@ -109,18 +71,6 @@ export default function App() {
     const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
   }, [refresh]);
-
-  // ⌘K / ⌘F both jump to the filter — the one keyboard move a dev expects.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "f")) {
-        e.preventDefault();
-        filterRef.current?.select();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   /** Runs an action with a busy lock, surfacing failures in the banner. */
   const run = async (id: string, action: () => Promise<void>) => {
@@ -150,6 +100,7 @@ export default function App() {
         a.serial
           ? invoke("stop_avd", { serial: a.serial })
           : invoke("launch_avd", { name: a.name }),
+      restart: () => invoke("restart_avd", { name: a.name, serial: a.serial }),
       reset: () => invoke("wipe_avd", { name: a.name, serial: a.serial }),
     }));
 
@@ -165,10 +116,10 @@ export default function App() {
       resetLabel: "Erase",
       resetWarning: "All apps, data and caches are wiped.",
       toggle: () =>
-        invoke(
-          s.state === "Booted" ? "shutdown_simulator" : "boot_simulator",
-          { udid: s.udid },
-        ),
+        invoke(s.state === "Booted" ? "shutdown_simulator" : "boot_simulator", {
+          udid: s.udid,
+        }),
+      restart: () => invoke("restart_simulator", { udid: s.udid }),
       reset: () => invoke("erase_simulator", { udid: s.udid }),
     }));
 
@@ -190,14 +141,16 @@ export default function App() {
         toggleLabel: r.running ? "Stop" : "Start",
         resetLabel: "Remove",
         resetWarning: "The container and its writable layer are deleted.",
-        toggle:
-          (r.running ? r.can_stop : r.can_start)
-            ? () =>
-                invoke("runtime_action", {
-                  id: r.id,
-                  action: r.running ? "stop" : "start",
-                })
-            : null,
+        toggle: (r.running ? r.can_stop : r.can_start)
+          ? () =>
+              invoke("runtime_action", {
+                id: r.id,
+                action: r.running ? "stop" : "start",
+              })
+          : null,
+        // Containers restart through their own supervisor; a stop/start pair
+        // from here would fight it.
+        restart: null,
         reset: r.can_remove
           ? () => invoke("runtime_action", { id: r.id, action: "remove" })
           : null,
@@ -207,12 +160,9 @@ export default function App() {
 
   /**
    * Collapse the flat port list into families: one row per process (carrying
-   * all of its ports), nested under the topmost listening ancestor. Three
-   * `qemu` rows on 5554/5555/8554 are one process, and that process belongs to
-   * the emulator that spawned it — showing them as six unrelated rows was the
-   * noise.
+   * all of its ports), nested under the topmost listening ancestor.
    */
-  const families = useMemo(() => {
+  const families: Family[] = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const rows = q
       ? ports.filter((p) =>
@@ -248,14 +198,16 @@ export default function App() {
     }
 
     const grouped = new Map<number, Family>();
-    for (const [rootId, procsInFamily] of members) {
-      const root =
-        procsInFamily.find((p) => p.pid === rootId) ?? procsInFamily[0];
+    for (const [rootId, inFamily] of members) {
+      const root = inFamily.find((p) => p.pid === rootId) ?? inFamily[0];
       grouped.set(rootId, {
         root,
-        children: procsInFamily.filter((p) => p !== root),
+        children: inFamily.filter((p) => p !== root),
       });
     }
+
+    const lowestPort = (f: Family) =>
+      Math.min(...[f.root, ...f.children].flatMap((p) => p.ports));
 
     const weight = (f: Family) => {
       const all = [f.root, ...f.children];
@@ -264,22 +216,190 @@ export default function App() {
           return all.reduce((sum, p) => sum + p.memory, 0);
         case "pid":
           return f.root.pid;
+        // How many processes belong together — a lone process weighs 1.
+        case "family":
+          return all.length;
         default:
-          return Math.min(...all.flatMap((p) => p.ports));
+          return lowestPort(f);
       }
     };
 
-    return [...grouped.values()].sort((a, b) =>
-      sort.key === "name"
-        ? a.root.name.localeCompare(b.root.name) * sort.dir
-        : (weight(a) - weight(b)) * sort.dir,
-    );
+    return [...grouped.values()].sort((a, b) => {
+      if (sort.key === "name")
+        return a.root.name.localeCompare(b.root.name) * sort.dir;
+      const delta = (weight(a) - weight(b)) * sort.dir;
+      // Equal weights would otherwise land in map-insertion order.
+      return delta || lowestPort(a) - lowestPort(b);
+    });
   }, [ports, filter, sort]);
 
-  const visibleCount = families.reduce(
-    (n, f) => n + [f.root, ...f.children].reduce((m, p) => m + p.ports.length, 0),
-    0,
+  const shownProcs = useMemo(
+    () => families.flatMap((f) => [f.root, ...f.children]),
+    [families],
   );
+
+  /**
+   * Fast Kill targets: names holding more than one process, plus language
+   * runtimes that spread across differently-named executables.
+   */
+  const killGroups: KillGroup[] = useMemo(() => {
+    const bucket = (key: (p: Proc) => string | null) => {
+      const map = new Map<string, Proc[]>();
+      for (const proc of shownProcs) {
+        const k = key(proc);
+        if (!k) continue;
+        const list = map.get(k);
+        if (list) list.push(proc);
+        else map.set(k, [proc]);
+      }
+      return [...map.entries()].filter(([, procs]) => procs.length > 1);
+    };
+
+    const build = (
+      entries: [string, Proc[]][],
+      kind: KillGroup["kind"],
+    ): KillGroup[] =>
+      entries.map(([name, procs]) => ({
+        name,
+        kind,
+        procs,
+        memory: procs.reduce((sum, p) => sum + p.memory, 0),
+        // A runtime sweep is only as risky as the riskiest thing in it.
+        warning: procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
+      }));
+
+    const byName = build(bucket((p) => p.name), "name");
+    const fingerprint = (g: KillGroup) =>
+      g.procs
+        .map((p) => p.pid)
+        .sort((a, b) => a - b)
+        .join(",");
+    const seen = new Set(byName.map(fingerprint));
+
+    // A runtime group covering exactly one name group is the same button
+    // twice — drop it and keep the specific one.
+    const byRuntime = build(bucket((p) => runtimeOf(p.name)), "runtime").filter(
+      (g) => !seen.has(fingerprint(g)),
+    );
+
+    return [
+      ...byRuntime.sort((a, b) => b.procs.length - a.procs.length),
+      ...byName.sort(
+        (a, b) => b.procs.length - a.procs.length || b.memory - a.memory,
+      ),
+    ];
+  }, [shownProcs]);
+
+  const visibleCount = shownProcs.reduce((n, p) => n + p.ports.length, 0);
+
+  /** Selection only ever refers to rows still on screen. */
+  useEffect(() => {
+    setSelected((prev) => {
+      const alive = new Set(shownProcs.map((p) => p.pid));
+      const next = new Set([...prev].filter((pid) => alive.has(pid)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [shownProcs]);
+
+  /**
+   * The one kill path. Bulk selection, a Fast Kill chip and a single row all
+   * arrive here, so the confirmation and the elevation retry cannot drift
+   * apart between them.
+   */
+  const killMany = async (
+    id: string,
+    title: string,
+    procs: Proc[],
+    warning: string | null,
+  ) => {
+    if (procs.length === 0) return;
+    const ok = await ask({
+      title,
+      // The detail line is what makes a bulk kill safe to approve: it says
+      // which project or app each PID actually belongs to.
+      lines: procs.map((p) => ({
+        primary: `${p.name} · pid ${p.pid} · :${p.ports.join(", :")} · ${mb(p.memory)}`,
+        secondary: p.detail || undefined,
+      })),
+      warning,
+      confirmLabel: `Kill ${procs.length}`,
+    });
+    if (!ok) return;
+
+    setBusy(id);
+    try {
+      const report = await invoke<KillReport>("kill_processes", {
+        pids: procs.map((p) => p.pid),
+      });
+
+      if (report.denied.length > 0) {
+        const elevate = await ask({
+          title: `${report.denied.length} of ${procs.length} refused to close`,
+          lines: report.denied.map((pid) => {
+            const proc = procs.find((p) => p.pid === pid);
+            return {
+              primary: `${proc?.name ?? "process"} · pid ${pid}`,
+              secondary: proc?.detail || undefined,
+            };
+          }),
+          warning: `They belong to another user. ${report.elevation}`,
+          confirmLabel: "Retry as administrator",
+        });
+        if (elevate)
+          await invoke("kill_processes_elevated", { pids: report.denied });
+      }
+      setSelected(new Set());
+      await refresh();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const killSelected = () => {
+    const procs = shownProcs.filter((p) => selected.has(p.pid));
+    killMany(
+      "selection",
+      `Kill ${procs.length} selected ${procs.length === 1 ? "process" : "processes"}?`,
+      procs,
+      procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
+    );
+  };
+
+  const exportSnapshot = async () => {
+    try {
+      const rows = shownProcs.flatMap((p) =>
+        p.ports.map((port) => ({
+          port,
+          name: p.name,
+          detail: p.detail,
+          pid: p.pid,
+          memory_bytes: p.memory,
+        })),
+      );
+      // The stamp is built here: the webview owns the user's clock and locale.
+      const stamp = new Date().toISOString().slice(0, 19);
+      const path = await invoke<string>("export_snapshot", {
+        rows,
+        format,
+        stamp,
+      });
+      setNotice({ text: `Exported ${rows.length} rows`, path });
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
+  useShortcuts({
+    "mod+k": () => filterRef.current?.select(),
+    "mod+f": () => filterRef.current?.select(),
+    "mod+r": refresh,
+    "mod+e": exportSnapshot,
+    "mod+a": () => setSelected(new Set(shownProcs.map((p) => p.pid))),
+    "mod+backspace": killSelected,
+    Escape: () => setSelected(new Set()),
+  });
 
   /** Same column flips direction; a new column starts at its natural one. */
   const toggleSort = (key: SortKey) =>
@@ -289,46 +409,38 @@ export default function App() {
         : { key, dir: defaultDir(key) },
     );
 
+  const toggleSelect = (pid: number) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(pid) ? next.delete(pid) : next.add(pid);
+      return next;
+    });
+
+  const toggleAll = () =>
+    setSelected((prev) =>
+      prev.size === shownProcs.length
+        ? new Set()
+        : new Set(shownProcs.map((p) => p.pid)),
+    );
+
+  const saveFilter = () => {
+    const q = filter.trim();
+    if (q && !savedFilters.includes(q))
+      setSavedFilters((prev) => [q, ...prev].slice(0, 12));
+  };
+
   return (
     <div className="app">
-      <header className="toolbar">
-        <h1 className="wordmark">
-          portiye<span className="wordmark__dot">.</span>
-        </h1>
-
-        <div className="toolbar__spacer" />
-
-        <div className="field">
-          <input
-            ref={filterRef}
-            className="field__input"
-            type="search"
-            value={filter}
-            onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter ports"
-            aria-label="Filter ports by number, process or path"
-          />
-          <span className="field__kbd">⌘K</span>
-        </div>
-
-        <button
-          className="btn btn--icon"
-          onClick={refresh}
-          aria-label="Refresh now"
-          title="Refresh now"
-        >
-          <RefreshIcon />
-        </button>
-
-        <button
-          className="btn btn--icon"
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-          aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-          title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
-        >
-          {theme === "dark" ? <SunIcon /> : <MoonIcon />}
-        </button>
-      </header>
+      <Toolbar
+        theme={theme}
+        onTheme={setTheme}
+        onRefresh={refresh}
+        format={format}
+        onFormat={setFormat}
+        onExport={exportSnapshot}
+        memoryWarnMb={memoryWarnMb}
+        onMemoryWarnMb={setMemoryWarnMb}
+      />
 
       {error && (
         <p className="banner" role="alert">
@@ -343,11 +455,36 @@ export default function App() {
         </p>
       )}
 
+      {notice && (
+        <p className="banner banner--ok" role="status">
+          <span className="banner__text">
+            {notice.text}
+            {notice.path && ` → ${notice.path}`}
+          </span>
+          {notice.path && (
+            <button
+              className="btn"
+              onClick={() => revealItemInDir(notice.path!)}
+            >
+              Reveal
+            </button>
+          )}
+          <button
+            className="btn btn--icon"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+          >
+            <CloseIcon />
+          </button>
+        </p>
+      )}
+
       <DevicePanel
         title="Devices"
         devices={devices}
         busy={busy}
         run={run}
+        ask={ask}
         empty="No emulators or simulators found. Create one in Android Studio, or install Xcode for iOS devices."
       />
 
@@ -359,11 +496,12 @@ export default function App() {
           devices={runtimeDevices}
           busy={busy}
           run={run}
+          ask={ask}
         />
       )}
 
       <section className="panel panel--fill">
-        <div className="panel__head">
+        <div className="panel__head panel__head--tools">
           <h2 className="panel__title">
             {/* Everything in this panel is listening by definition — unlike
                 Devices and Runtimes, the state is uniform, so the dot belongs
@@ -371,10 +509,50 @@ export default function App() {
             <span className="dot dot--live" aria-hidden="true" />
             Listening ports
           </h2>
+
+          {selected.size > 0 && (
+            <button
+              className="btn btn--solid-danger"
+              disabled={busy === "selection"}
+              aria-busy={busy === "selection"}
+              onClick={killSelected}
+              title="Kill the selected processes (⌘⌫)"
+            >
+              Kill {selected.size} selected
+            </button>
+          )}
+
+          {/* The filter only ever acted on this panel, so it lives with it. */}
+          <div className="field">
+            <input
+              ref={filterRef}
+              className="field__input"
+              type="search"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && saveFilter()}
+              placeholder="Filter ports"
+              aria-label="Filter ports by number, process or path"
+              list="portiye-saved-filters"
+            />
+            <datalist id="portiye-saved-filters">
+              {savedFilters.map((f) => (
+                <option key={f} value={f} />
+              ))}
+            </datalist>
+            <span className="field__kbd">⌘K</span>
+          </div>
+
+          {/* Group is not a column — it orders by how many processes belong
+              together — so it sits with the panel, not in the header row. */}
+          <SortHead sort={sort} onSort={toggleSort} k="family">
+            Group
+          </SortHead>
           <span className="panel__count">
             {filter ? `${visibleCount} / ${ports.length}` : ports.length}
           </span>
         </div>
+
         <div className="panel__scroll">
           {families.length === 0 ? (
             <p className="empty">
@@ -394,243 +572,42 @@ export default function App() {
             </p>
           ) : (
             <>
-              <div className="ports__head">
-                <SortHead sort={sort} onSort={toggleSort} k="port" cell="port__number">
-                  Port
-                </SortHead>
-                <SortHead sort={sort} onSort={toggleSort} k="name" cell="port__text">
-                  Process
-                </SortHead>
-                <SortHead sort={sort} onSort={toggleSort} k="memory" cell="port__mem">
-                  Memory
-                </SortHead>
-                <SortHead sort={sort} onSort={toggleSort} k="pid" cell="port__pid">
-                  PID
-                </SortHead>
-                <span className="port__action" aria-hidden="true" />
-              </div>
-              <ul className="ports">
-                {families.map((f) =>
-                  [f.root, ...f.children].map((proc, i) => (
-                    <ProcRow
-                      key={proc.pid}
-                      proc={proc}
-                      child={i > 0}
-                      busy={busy === `port:${proc.pid}`}
-                      onKill={() =>
-                        run(`port:${proc.pid}`, () =>
-                          invoke("kill_process", { pid: proc.pid }),
-                        )
-                      }
-                    />
-                  )),
-                )}
-              </ul>
+              <FastKill
+                groups={killGroups}
+                busy={busy}
+                onKill={(g) =>
+                  killMany(
+                    `fast:${g.kind}:${g.name}`,
+                    `Kill ${g.procs.length} ${g.name} processes?`,
+                    g.procs,
+                    g.warning,
+                  )
+                }
+              />
+              <PortTable
+                families={families}
+                sort={sort}
+                onSort={toggleSort}
+                selected={selected}
+                onToggleSelect={toggleSelect}
+                onToggleAll={toggleAll}
+                memoryWarn={memoryWarnMb * 1_048_576}
+                busy={busy}
+                onKill={(proc) =>
+                  killMany(
+                    `port:${proc.pid}`,
+                    `Kill ${proc.name}?`,
+                    [proc],
+                    warningFor(proc.name),
+                  )
+                }
+              />
             </>
           )}
         </div>
       </section>
+
+      {confirmDialog}
     </div>
-  );
-}
-
-/** A titled list of devices — emulators, or runtimes, or anything row-shaped. */
-function DevicePanel({
-  title,
-  devices,
-  busy,
-  run,
-  empty,
-}: {
-  title: string;
-  devices: Device[];
-  busy: string | null;
-  run: (id: string, action: () => Promise<void>) => void;
-  empty?: string;
-}) {
-  const running = devices.filter((d) => d.running).length;
-
-  return (
-    <section className="panel">
-      <div className="panel__head">
-        <h2 className="panel__title">{title}</h2>
-        <span className="panel__count">
-          {running} / {devices.length} running
-        </span>
-      </div>
-      <div className="panel__body">
-        {devices.length === 0 ? (
-          <p className="empty">{empty}</p>
-        ) : (
-          <ul className="devices">
-            {devices.map((d) => (
-              <DeviceRow
-                key={d.id}
-                device={d}
-                busy={busy === d.id}
-                onToggle={() => d.toggle && run(d.id, d.toggle)}
-                onReset={() => {
-                  if (d.reset && confirm(`Reset “${d.name}”?\n${d.resetWarning}`))
-                    run(d.id, d.reset);
-                }}
-              />
-            ))}
-          </ul>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/**
- * One process. Extra ports collapse into a `+n` chip rather than repeating the
- * row, so the fixed column widths (and the sortable header) stay aligned.
- */
-function ProcRow({
-  proc,
-  child,
-  busy,
-  onKill,
-}: {
-  proc: Proc;
-  child: boolean;
-  busy: boolean;
-  onKill: () => void;
-}) {
-  const [first, ...rest] = proc.ports;
-  const allPorts = proc.ports.map((p) => `:${p}`).join(", ");
-
-  return (
-    <li className={child ? "port port--child" : "port"}>
-      <span className="port__number" title={rest.length ? allPorts : undefined}>
-        :{first}
-        {rest.length > 0 && <span className="port__more">+{rest.length}</span>}
-      </span>
-      <span className="port__text">
-        <span className="port__name">
-          {child && (
-            <span className="port__branch" aria-hidden="true">
-              ↳
-            </span>
-          )}
-          {proc.name}
-        </span>
-        {proc.detail && (
-          <span className="port__detail" title={proc.detail}>
-            {proc.detail}
-          </span>
-        )}
-      </span>
-      <span className="port__mem">{mb(proc.memory)}</span>
-      <span className="port__pid">{proc.pid}</span>
-      <span className="port__action">
-        <button
-          className="btn btn--danger"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={onKill}
-          aria-label={`Kill ${proc.name} on ${allPorts}`}
-        >
-          {busy ? "…" : "Kill"}
-        </button>
-      </span>
-    </li>
-  );
-}
-
-/**
- * A column header that sorts. The direction lives in the arrow's rotation and
- * in the accessible name, so it never depends on the glyph alone.
- */
-function SortHead({
-  sort,
-  onSort,
-  k,
-  cell,
-  children,
-}: {
-  sort: Sort;
-  onSort: (k: SortKey) => void;
-  k: SortKey;
-  cell: string;
-  children: string;
-}) {
-  const active = sort.key === k;
-  const next = active
-    ? sort.dir === 1
-      ? "descending"
-      : "ascending"
-    : defaultDir(k) === 1
-      ? "ascending"
-      : "descending";
-
-  return (
-    <span className={cell}>
-      <button
-        className="sort"
-        data-active={active || undefined}
-        data-dir={active && sort.dir === -1 ? "desc" : undefined}
-        onClick={() => onSort(k)}
-        aria-label={`Sort by ${children.toLowerCase()}, ${next}`}
-      >
-        {children}
-        <SortArrowIcon />
-      </button>
-    </span>
-  );
-}
-
-function DeviceRow({
-  device,
-  busy,
-  onToggle,
-  onReset,
-}: {
-  device: Device;
-  busy: boolean;
-  onToggle: () => void;
-  onReset: () => void;
-}) {
-  return (
-    <li className={device.running ? "device device--live" : "device"}>
-      <span
-        className={device.running ? "dot dot--live" : "dot"}
-        aria-hidden="true"
-      />
-      <span className="device__text">
-        <span className="device__name" title={device.name}>
-          {device.name}
-        </span>
-        <span className="device__meta">
-          {device.platform}
-          <span aria-hidden="true">·</span>
-          {/* Running state is carried by the dot and the button label, so the
-              meta line stays purely identifying. */}
-          <span>{device.meta}</span>
-        </span>
-      </span>
-      <span className="device__actions">
-        {device.toggle && (
-          <button
-            className={device.running ? "btn" : "btn btn--primary"}
-            disabled={busy}
-            aria-busy={busy}
-            onClick={onToggle}
-          >
-            {busy ? "…" : device.toggleLabel}
-          </button>
-        )}
-        {device.reset && (
-          <button
-            className="btn btn--danger"
-            disabled={busy}
-            aria-busy={busy}
-            onClick={onReset}
-          >
-            {device.resetLabel}
-          </button>
-        )}
-      </span>
-    </li>
   );
 }

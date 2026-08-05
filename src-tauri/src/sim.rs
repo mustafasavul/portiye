@@ -87,6 +87,16 @@ pub fn shutdown_simulator(udid: String) -> Result<(), String> {
     simctl(&["shutdown", &udid]).map(|_| ())
 }
 
+/// Stop then start again, keeping the device's data.
+///
+/// `simctl shutdown` returns once the device is down, so unlike the Android
+/// emulator this needs no wait loop.
+#[tauri::command]
+pub fn restart_simulator(udid: String) -> Result<(), String> {
+    let _ = simctl(&["shutdown", &udid]); // no-op if already off
+    boot_simulator(udid)
+}
+
 /// Factory reset: wipes apps, data and caches. Device must be shut down first.
 #[tauri::command]
 pub fn erase_simulator(udid: String) -> Result<(), String> {

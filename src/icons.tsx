@@ -40,6 +40,12 @@ export const SortArrowIcon = () => (
   </svg>
 );
 
+export const DownloadIcon = () => (
+  <svg {...base}>
+    <path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M2.5 13.5h11" />
+  </svg>
+);
+
 export const CloseIcon = () => (
   <svg {...base}>
     <path d="m4 4 8 8M12 4l-8 8" />

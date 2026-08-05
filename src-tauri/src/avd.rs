@@ -121,19 +121,39 @@ pub fn stop_avd(serial: String) -> Result<(), String> {
 ///
 /// The emulator refuses to run the same AVD twice, so a running instance has
 /// to be killed *and observed to be gone* before relaunching.
+/// Kill a running emulator and return only once it is actually gone.
+///
+/// The emulator refuses to run the same AVD twice, so anything that relaunches
+/// must wait rather than assume. Shared by wipe and restart so the wait cannot
+/// drift between them.
+fn kill_and_wait(serial: &str) -> Result<(), String> {
+    adb(&["-s", serial, "emu", "kill"])?;
+    // ponytail: poll instead of watching adb events; 10s covers a normal
+    // shutdown, and failing loudly beats a silent "two instances" error.
+    let gone = (0..40).any(|_| {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        !running_serials().iter().any(|(s, _)| s == serial)
+    });
+    if gone {
+        Ok(())
+    } else {
+        Err(format!("{serial} did not shut down in time"))
+    }
+}
+
 #[tauri::command]
 pub fn wipe_avd(name: String, serial: Option<String>) -> Result<(), String> {
     if let Some(serial) = serial {
-        adb(&["-s", &serial, "emu", "kill"])?;
-        // ponytail: poll instead of watching adb events; 10s covers a normal
-        // shutdown, and failing loudly beats a silent "two instances" error.
-        let gone = (0..40).any(|_| {
-            std::thread::sleep(std::time::Duration::from_millis(250));
-            !running_serials().iter().any(|(s, _)| *s == serial)
-        });
-        if !gone {
-            return Err(format!("{serial} did not shut down in time"));
-        }
+        kill_and_wait(&serial)?;
     }
     spawn_emulator(&name, &["-wipe-data"])
+}
+
+/// Stop then start again, keeping the device's data.
+#[tauri::command]
+pub fn restart_avd(name: String, serial: Option<String>) -> Result<(), String> {
+    if let Some(serial) = serial {
+        kill_and_wait(&serial)?;
+    }
+    spawn_emulator(&name, &[])
 }

@@ -241,6 +241,111 @@ pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
     Ok(entries)
 }
 
+#[derive(Serialize, Default, Debug)]
+pub struct KillReport {
+    pub killed: Vec<u32>,
+    /// Alive, but the OS refused — almost always another user's process.
+    pub denied: Vec<u32>,
+    /// Already gone by the time we got there. Not an error.
+    pub missing: Vec<u32>,
+    /// How this platform asks for elevation, so the UI can say it plainly.
+    pub elevation: String,
+}
+
+fn elevation_hint() -> String {
+    if cfg!(target_os = "macos") {
+        "macOS will ask for your password.".into()
+    } else if cfg!(target_os = "windows") {
+        "Windows will show a User Account Control prompt.".into()
+    } else {
+        "Your desktop will ask for authentication.".into()
+    }
+}
+
+/// Kill many at once, reporting each outcome rather than failing on the first.
+#[tauri::command]
+pub fn kill_processes(pids: Vec<u32>) -> KillReport {
+    let sys = System::new_all();
+    let mut report = KillReport {
+        elevation: elevation_hint(),
+        ..Default::default()
+    };
+
+    for pid in pids {
+        match sys.process(Pid::from_u32(pid)) {
+            None => report.missing.push(pid),
+            Some(proc) if proc.kill() => report.killed.push(pid),
+            Some(_) => report.denied.push(pid),
+        }
+    }
+    report
+}
+
+/// Retry the refused ones with administrator rights.
+///
+/// Every platform gets its own native prompt — no password ever passes through
+/// this app. The PIDs are `u32`, so the command string they build is digits and
+/// spaces only and cannot carry a shell payload.
+#[tauri::command]
+pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
+    if pids.is_empty() {
+        return Ok(());
+    }
+    let list = pids
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    #[cfg(target_os = "macos")]
+    let out = cmd("osascript")
+        .args([
+            "-e",
+            &format!(
+                "do shell script \"/bin/kill -9 {list}\" with administrator privileges"
+            ),
+        ])
+        .output();
+
+    #[cfg(target_os = "linux")]
+    let out = {
+        let mut args = vec!["/bin/kill".to_string(), "-9".to_string()];
+        args.extend(pids.iter().map(u32::to_string));
+        cmd("pkexec").args(&args).output()
+    };
+
+    #[cfg(target_os = "windows")]
+    let out = {
+        let args = pids
+            .iter()
+            .map(|p| format!("'/PID','{p}'"))
+            .collect::<Vec<_>>()
+            .join(",");
+        cmd("powershell")
+            .args([
+                "-NoProfile",
+                "-Command",
+                &format!(
+                    "Start-Process taskkill -ArgumentList '/F',{args} -Verb RunAs -Wait"
+                ),
+            ])
+            .output()
+    };
+
+    let out = out.map_err(|e| format!("could not request elevation: {e}"))?;
+    if out.status.success() {
+        Ok(())
+    } else {
+        let err = String::from_utf8_lossy(&out.stderr);
+        // The user clicking Cancel is not a failure worth shouting about.
+        if err.contains("User canceled") || err.contains("dismissed") {
+            Ok(())
+        } else {
+            Err(format!("elevated kill failed: {}", err.trim()))
+        }
+    }
+}
+
 #[tauri::command]
 pub fn kill_process(pid: u32) -> Result<(), String> {
     let sys = System::new_all();
@@ -307,6 +412,27 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
     fn family_root_survives_a_parent_cycle() {
         let parents = HashMap::from([(1, 2), (2, 1)]);
         assert_eq!(family_root(1, &parents, &HashSet::from([1, 2])), 2);
+    }
+
+    #[test]
+    fn kill_processes_reports_each_outcome() {
+        // Our own child, so the test never touches anything it does not own.
+        let child = Command::new("sleep")
+            .arg("60")
+            .spawn()
+            .expect("spawn a sleep to kill");
+        let pid = child.id();
+        // PID 1 is init/launchd: alive, and never killable by a normal user.
+        let report = kill_processes(vec![pid, 1, 4_294_967_294]);
+
+        assert_eq!(report.killed, vec![pid], "our own child should die");
+        assert_eq!(report.denied, vec![1], "pid 1 is alive but protected");
+        assert_eq!(
+            report.missing,
+            vec![4_294_967_294],
+            "a pid that does not exist is missing, not denied"
+        );
+        assert!(!report.elevation.is_empty(), "the UI needs something to say");
     }
 
     #[test]

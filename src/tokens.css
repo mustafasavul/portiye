@@ -65,6 +65,11 @@
   --color-accent-soft: oklch(94% 0.032 256);
   --color-danger: oklch(50% 0.19 25);
   --color-danger-soft: oklch(95% 0.028 25);
+  --color-danger-ink: oklch(99% 0.004 25);
+  /* Amber: "think before you press this", distinct from danger red. */
+  --color-warn: oklch(52% 0.13 70);
+  --color-warn-soft: oklch(95% 0.035 80);
+  --color-warn-rule: oklch(80% 0.06 75);
   --color-live: oklch(58% 0.15 152);
   --color-focus: oklch(52% 0.2 256);
   --color-shadow: oklch(24% 0.02 258 / 0.06);
@@ -85,6 +90,10 @@
   --color-accent-soft: oklch(31% 0.062 256);
   --color-danger: oklch(72% 0.16 25);
   --color-danger-soft: oklch(31% 0.06 25);
+  --color-danger-ink: oklch(17% 0.02 25);
+  --color-warn: oklch(80% 0.12 75);
+  --color-warn-soft: oklch(33% 0.055 70);
+  --color-warn-rule: oklch(45% 0.07 72);
   --color-live: oklch(74% 0.14 152);
   --color-focus: oklch(76% 0.14 254);
   --color-shadow: oklch(0% 0 0 / 0.35);
