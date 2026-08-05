@@ -1,5 +1,6 @@
 mod avd;
 mod ports;
+mod runtimes;
 mod sim;
 mod tray;
 
@@ -18,6 +19,8 @@ pub fn run() {
             sim::boot_simulator,
             sim::shutdown_simulator,
             sim::erase_simulator,
+            runtimes::list_runtimes,
+            runtimes::runtime_action,
         ])
         .setup(|app| {
             tray::init(app.handle())?;

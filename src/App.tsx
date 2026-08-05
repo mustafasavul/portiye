@@ -32,21 +32,34 @@ type Family = { root: Proc; children: Proc[] };
 type Avd = { name: string; serial: string | null };
 type Simulator = { udid: string; name: string; state: string; runtime: string };
 
+/** Docker containers, Ollama models, JVM build daemons — whatever is present. */
+type RuntimeItem = {
+  id: string;
+  kind: string;
+  name: string;
+  meta: string;
+  running: boolean;
+  can_start: boolean;
+  can_stop: boolean;
+  can_remove: boolean;
+};
+
 /**
- * Android emulators and iOS simulators carry the same shape — a name, a
- * platform, one line of meta, a running flag, a start/stop action and a
- * destructive reset. One row type renders both.
+ * Emulators, simulators, containers, models and build daemons all carry the
+ * same shape — a name, a platform label, one line of meta, a running flag, a
+ * start/stop action and sometimes a destructive one. One row type renders all
+ * of them; an action the source cannot perform is simply null.
  */
 type Device = {
   id: string;
   name: string;
-  platform: "Android" | "iOS";
+  platform: string;
   meta: string;
   running: boolean;
   toggleLabel: string;
+  toggle: (() => Promise<void>) | null;
+  reset: (() => Promise<void>) | null;
   resetLabel: string;
-  toggle: () => Promise<void>;
-  reset: () => Promise<void>;
   resetWarning: string;
 };
 
@@ -65,6 +78,7 @@ export default function App() {
   const [theme, setTheme] = useTheme();
   const [avds, setAvds] = useState<Avd[]>([]);
   const [sims, setSims] = useState<Simulator[]>([]);
+  const [runtimes, setRuntimes] = useState<RuntimeItem[]>([]);
   const [ports, setPorts] = useState<PortEntry[]>([]);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "port", dir: 1 });
@@ -74,14 +88,16 @@ export default function App() {
 
   const refresh = useCallback(async () => {
     try {
-      const [a, s, p] = await Promise.all([
+      const [a, s, p, r] = await Promise.all([
         invoke<Avd[]>("list_avds"),
         invoke<Simulator[]>("list_simulators"),
         invoke<PortEntry[]>("get_listening_ports"),
+        invoke<RuntimeItem[]>("list_runtimes"),
       ]);
       setAvds(a);
       setSims(s);
       setPorts(p);
+      setRuntimes(r);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -128,7 +144,8 @@ export default function App() {
       running: a.serial !== null,
       toggleLabel: a.serial ? "Stop" : "Launch",
       resetLabel: "Wipe",
-      resetWarning: "All apps, data and snapshots are erased, then it cold boots.",
+      resetWarning:
+        "All apps, data and snapshots are erased, then it cold boots.",
       toggle: () =>
         a.serial
           ? invoke("stop_avd", { serial: a.serial })
@@ -161,7 +178,32 @@ export default function App() {
     );
   }, [avds, sims]);
 
-  const runningCount = devices.filter((d) => d.running).length;
+  /** The same row shape, fed by whatever runtimes this machine actually has. */
+  const runtimeDevices: Device[] = useMemo(
+    () =>
+      runtimes.map((r) => ({
+        id: r.id,
+        name: r.name,
+        platform: r.kind,
+        meta: r.meta,
+        running: r.running,
+        toggleLabel: r.running ? "Stop" : "Start",
+        resetLabel: "Remove",
+        resetWarning: "The container and its writable layer are deleted.",
+        toggle:
+          (r.running ? r.can_stop : r.can_start)
+            ? () =>
+                invoke("runtime_action", {
+                  id: r.id,
+                  action: r.running ? "stop" : "start",
+                })
+            : null,
+        reset: r.can_remove
+          ? () => invoke("runtime_action", { id: r.id, action: "remove" })
+          : null,
+      })),
+    [runtimes],
+  );
 
   /**
    * Collapse the flat port list into families: one row per process (carrying
@@ -194,15 +236,25 @@ export default function App() {
     }
     for (const proc of procs.values()) proc.ports.sort((a, b) => a - b);
 
-    const grouped = new Map<number, Family>();
+    // Collect members first, then pick the root — deciding the root while
+    // iterating drops whichever member arrives before it.
+    const members = new Map<number, Proc[]>();
     for (const proc of [...procs.values()].sort((a, b) => a.pid - b.pid)) {
       // A filter can hide the root; then the survivor heads its own family.
       const rootId = procs.has(proc.family) ? proc.family : proc.pid;
-      const family = grouped.get(rootId);
-      if (!family) grouped.set(rootId, { root: proc, children: [] });
-      else if (proc.pid === rootId)
-        grouped.set(rootId, { root: proc, children: family.children });
-      else family.children.push(proc);
+      const list = members.get(rootId);
+      if (list) list.push(proc);
+      else members.set(rootId, [proc]);
+    }
+
+    const grouped = new Map<number, Family>();
+    for (const [rootId, procsInFamily] of members) {
+      const root =
+        procsInFamily.find((p) => p.pid === rootId) ?? procsInFamily[0];
+      grouped.set(rootId, {
+        root,
+        children: procsInFamily.filter((p) => p !== root),
+      });
     }
 
     const weight = (f: Family) => {
@@ -291,41 +343,34 @@ export default function App() {
         </p>
       )}
 
-      <section className="panel">
-        <div className="panel__head">
-          <h2 className="panel__title">Devices</h2>
-          <span className="panel__count">
-            {runningCount} / {devices.length} running
-          </span>
-        </div>
-        <div className="panel__body">
-          {devices.length === 0 ? (
-            <p className="empty">
-              No emulators or simulators found. Create one in Android Studio, or
-              install Xcode for iOS devices.
-            </p>
-          ) : (
-            <ul className="devices">
-              {devices.map((d) => (
-                <DeviceRow
-                  key={d.id}
-                  device={d}
-                  busy={busy === d.id}
-                  onToggle={() => run(d.id, d.toggle)}
-                  onReset={() => {
-                    if (confirm(`Reset “${d.name}”?\n${d.resetWarning}`))
-                      run(d.id, d.reset);
-                  }}
-                />
-              ))}
-            </ul>
-          )}
-        </div>
-      </section>
+      <DevicePanel
+        title="Devices"
+        devices={devices}
+        busy={busy}
+        run={run}
+        empty="No emulators or simulators found. Create one in Android Studio, or install Xcode for iOS devices."
+      />
+
+      {/* Hidden entirely when the machine has no Docker, Ollama or JVM
+          daemons — an empty panel would only be noise. */}
+      {runtimeDevices.length > 0 && (
+        <DevicePanel
+          title="Runtimes"
+          devices={runtimeDevices}
+          busy={busy}
+          run={run}
+        />
+      )}
 
       <section className="panel panel--fill">
         <div className="panel__head">
-          <h2 className="panel__title">Listening ports</h2>
+          <h2 className="panel__title">
+            {/* Everything in this panel is listening by definition — unlike
+                Devices and Runtimes, the state is uniform, so the dot belongs
+                on the heading rather than on each row. */}
+            <span className="dot dot--live" aria-hidden="true" />
+            Listening ports
+          </h2>
           <span className="panel__count">
             {filter ? `${visibleCount} / ${ports.length}` : ports.length}
           </span>
@@ -386,6 +431,54 @@ export default function App() {
         </div>
       </section>
     </div>
+  );
+}
+
+/** A titled list of devices — emulators, or runtimes, or anything row-shaped. */
+function DevicePanel({
+  title,
+  devices,
+  busy,
+  run,
+  empty,
+}: {
+  title: string;
+  devices: Device[];
+  busy: string | null;
+  run: (id: string, action: () => Promise<void>) => void;
+  empty?: string;
+}) {
+  const running = devices.filter((d) => d.running).length;
+
+  return (
+    <section className="panel">
+      <div className="panel__head">
+        <h2 className="panel__title">{title}</h2>
+        <span className="panel__count">
+          {running} / {devices.length} running
+        </span>
+      </div>
+      <div className="panel__body">
+        {devices.length === 0 ? (
+          <p className="empty">{empty}</p>
+        ) : (
+          <ul className="devices">
+            {devices.map((d) => (
+              <DeviceRow
+                key={d.id}
+                device={d}
+                busy={busy === d.id}
+                onToggle={() => d.toggle && run(d.id, d.toggle)}
+                onReset={() => {
+                  if (d.reset && confirm(`Reset “${d.name}”?\n${d.resetWarning}`))
+                    run(d.id, d.reset);
+                }}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -517,22 +610,26 @@ function DeviceRow({
         </span>
       </span>
       <span className="device__actions">
-        <button
-          className={device.running ? "btn" : "btn btn--primary"}
-          disabled={busy}
-          aria-busy={busy}
-          onClick={onToggle}
-        >
-          {busy ? "…" : device.toggleLabel}
-        </button>
-        <button
-          className="btn btn--danger"
-          disabled={busy}
-          aria-busy={busy}
-          onClick={onReset}
-        >
-          {device.resetLabel}
-        </button>
+        {device.toggle && (
+          <button
+            className={device.running ? "btn" : "btn btn--primary"}
+            disabled={busy}
+            aria-busy={busy}
+            onClick={onToggle}
+          >
+            {busy ? "…" : device.toggleLabel}
+          </button>
+        )}
+        {device.reset && (
+          <button
+            className="btn btn--danger"
+            disabled={busy}
+            aria-busy={busy}
+            onClick={onReset}
+          >
+            {device.resetLabel}
+          </button>
+        )}
       </span>
     </li>
   );
