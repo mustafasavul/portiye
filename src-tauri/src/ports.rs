@@ -19,6 +19,9 @@ pub struct PortEntry {
     pub detail: String,
     /// Resident set size in bytes (0 when the process vanished mid-scan).
     pub memory: u64,
+    /// Percent of one core. Zero on the very first scan — sysinfo needs two
+    /// samples of the same `System` to have anything to compare.
+    pub cpu: f32,
     /// PID of the highest ancestor that is *also* listening, or this PID when
     /// the process has no listening ancestor. Rows sharing a family belong to
     /// one tree — `emulator` spawning `qemu`, `adb` spawning its server.
@@ -177,13 +180,14 @@ fn raw_pairs() -> Result<Vec<(u32, u16)>, String> {
     Ok(parse_netstat(&String::from_utf8_lossy(&out.stdout)))
 }
 
-#[tauri::command]
-pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
+/// The real scan. Takes the caller's `System` so CPU percentages have a
+/// previous sample to compare against — a fresh `System` always reports 0.
+pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
+    sys.refresh_all();
     let mut pairs = raw_pairs()?;
     pairs.sort_unstable();
     pairs.dedup();
 
-    let sys = System::new_all();
     let home = home_dir();
 
     // Ancestry of every listener, walked once up front so `family_root` is a
@@ -232,6 +236,7 @@ pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
                     .unwrap_or_else(|| "unknown".into()),
                 detail: detail_for(&argv, cwd.as_deref(), home.as_deref()),
                 memory: proc.map(|p| p.memory()).unwrap_or(0),
+                cpu: proc.map(|p| p.cpu_usage()).unwrap_or(0.0),
                 family: family_root(pid, &parent_of, &listeners),
             }
         })
@@ -240,6 +245,7 @@ pub fn get_listening_ports() -> Result<Vec<PortEntry>, String> {
     entries.sort_by_key(|e| e.port);
     Ok(entries)
 }
+
 
 #[derive(Serialize, Default, Debug)]
 pub struct KillReport {

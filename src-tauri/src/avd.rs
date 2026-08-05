@@ -42,8 +42,13 @@ fn sdk_tool(dir: &str, name: &str) -> PathBuf {
     }
 }
 
+/// The adb binary, exposed so the log stream can reuse the same resolution.
+pub fn adb_bin() -> PathBuf {
+    sdk_tool("platform-tools", "adb")
+}
+
 fn adb(args: &[&str]) -> Result<String, String> {
-    let out = crate::ports::cmd(sdk_tool("platform-tools", "adb"))
+    let out = crate::ports::cmd(adb_bin())
         .args(args)
         .output()
         .map_err(|e| format!("adb not found: {e}"))?;
@@ -116,11 +121,6 @@ pub fn stop_avd(serial: String) -> Result<(), String> {
     adb(&["-s", &serial, "emu", "kill"]).map(|_| ())
 }
 
-/// Factory reset, the `simctl erase` equivalent: `-wipe-data` throws away
-/// userdata and snapshots on the next cold boot.
-///
-/// The emulator refuses to run the same AVD twice, so a running instance has
-/// to be killed *and observed to be gone* before relaunching.
 /// Kill a running emulator and return only once it is actually gone.
 ///
 /// The emulator refuses to run the same AVD twice, so anything that relaunches
@@ -141,6 +141,8 @@ fn kill_and_wait(serial: &str) -> Result<(), String> {
     }
 }
 
+/// Factory reset, the `simctl erase` equivalent: `-wipe-data` throws away
+/// userdata and snapshots on the next cold boot.
 #[tauri::command]
 pub fn wipe_avd(name: String, serial: Option<String>) -> Result<(), String> {
     if let Some(serial) = serial {

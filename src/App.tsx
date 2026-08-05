@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useTheme } from "./theme";
 import { warningFor } from "./risk";
@@ -11,6 +12,11 @@ import { Toolbar } from "./components/Toolbar";
 import { DevicePanel } from "./components/DevicePanel";
 import { FastKill } from "./components/FastKill";
 import { PortTable, SortHead } from "./components/PortTable";
+import { History } from "./components/History";
+import { ProcessDetail } from "./components/ProcessDetail";
+import { LogView } from "./components/LogView";
+import { Sweeps, type Sweep } from "./components/Sweeps";
+import { Profiles, type Profile } from "./components/Profiles";
 import { CloseIcon } from "./icons";
 import { defaultDir, mb } from "./types";
 import type {
@@ -44,33 +50,90 @@ export default function App() {
   const filterRef = useRef<HTMLInputElement>(null);
   const [ask, confirmDialog] = useConfirm();
 
+  const [view, setView] = useState<"ports" | "automation" | "history" | "logs">(
+    "ports",
+  );
+  const [detailPid, setDetailPid] = useState<number | null>(null);
+  /** Bumped on every watcher event so the history view refetches. */
+  const [revision, setRevision] = useState(0);
+
   const [savedFilters, setSavedFilters] = usePersisted<string[]>("filters", []);
+  const [sweeps, setSweeps] = usePersisted<Sweep[]>("sweeps", []);
+  const [profiles, setProfiles] = usePersisted<Profile[]>("profiles", []);
   const [format, setFormat] = usePersisted<"json" | "csv">("format", "json");
   const [memoryWarnMb, setMemoryWarnMb] = usePersisted("memoryWarnMb", 500);
+  const [notifyConflicts, setNotifyConflicts] = usePersisted("notifyConflicts", true);
+  const [notifyMemory, setNotifyMemory] = usePersisted("notifyMemory", true);
 
-  const refresh = useCallback(async () => {
+  /**
+   * Ports only. This is a cached read on the Rust side — the watcher already
+   * did the scan — so it is cheap enough to run on every event.
+   */
+  const refreshPorts = useCallback(async () => {
     try {
-      const [a, s, p, r] = await Promise.all([
-        invoke<Avd[]>("list_avds"),
-        invoke<Simulator[]>("list_simulators"),
-        invoke<PortEntry[]>("get_listening_ports"),
-        invoke<RuntimeItem[]>("list_runtimes"),
-      ]);
-      setAvds(a);
-      setSims(s);
-      setPorts(p);
-      setRuntimes(r);
+      setPorts(await invoke<PortEntry[]>("get_listening_ports"));
       setError(null);
     } catch (e) {
       setError(String(e));
     }
   }, []);
 
+  /**
+   * Devices and runtimes. Each of these shells out — `simctl list` alone costs
+   * ~0.8s, `docker ps` ~0.2s — so running them on the 5-second port tick meant
+   * the app spent a fifth of its life spawning subprocesses, which is what the
+   * stutter was. Emulators and containers change when *you* change them, so
+   * this runs on demand and on a slow timer instead.
+   */
+  const refreshDevices = useCallback(async () => {
+    try {
+      const [a, s, r] = await Promise.all([
+        invoke<Avd[]>("list_avds"),
+        invoke<Simulator[]>("list_simulators"),
+        invoke<RuntimeItem[]>("list_runtimes"),
+      ]);
+      setAvds(a);
+      setSims(s);
+      setRuntimes(r);
+    } catch (e) {
+      setError(String(e));
+    }
+  }, []);
+
+  const refresh = useCallback(async () => {
+    await Promise.all([refreshPorts(), refreshDevices()]);
+  }, [refreshPorts, refreshDevices]);
+
+  // The Rust watcher owns the only poll loop; this just reacts to it. Two
+  // pollers meant two scans of the same machine every five seconds.
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 5000);
-    return () => clearInterval(id);
-  }, [refresh]);
+    const un = listen("ports-changed", () => {
+      refreshPorts();
+      setRevision((r) => r + 1);
+    });
+    // Device enumeration on a slow timer, and a backstop for ports in case the
+    // watcher thread ever dies and stops emitting.
+    const devices = setInterval(refreshDevices, 30_000);
+    const backstop = setInterval(refreshPorts, 15_000);
+    return () => {
+      clearInterval(devices);
+      clearInterval(backstop);
+      un.then((f) => f());
+    };
+  }, [refresh, refreshPorts, refreshDevices]);
+
+  // The watcher notifies from Rust, so it needs the same threshold the table
+  // paints with — otherwise the badge and the notification disagree.
+  useEffect(() => {
+    invoke("set_watch_settings", {
+      settings: {
+        memory_warn_mb: memoryWarnMb,
+        notify_conflicts: notifyConflicts,
+        notify_memory: notifyMemory,
+      },
+    }).catch(() => {});
+  }, [memoryWarnMb, notifyConflicts, notifyMemory]);
 
   /** Runs an action with a busy lock, surfacing failures in the banner. */
   const run = async (id: string, action: () => Promise<void>) => {
@@ -367,6 +430,20 @@ export default function App() {
     );
   };
 
+  const runSweep = (sweep: Sweep, matched: Proc[]) =>
+    killMany(
+      `sweep:${sweep.name}`,
+      `Run “${sweep.name}” — kill ${matched.length} processes?`,
+      matched,
+      matched.map((p) => warningFor(p.name)).find(Boolean) ?? null,
+    );
+
+  /** Start every idle device in a profile, one after another. */
+  const launchProfile = (profile: Profile, targets: Device[]) =>
+    run(`profile:${profile.name}`, async () => {
+      for (const d of targets) if (d.toggle) await d.toggle();
+    });
+
   const exportSnapshot = async () => {
     try {
       const rows = shownProcs.flatMap((p) =>
@@ -432,6 +509,13 @@ export default function App() {
   return (
     <div className="app">
       <Toolbar
+        view={view}
+        onView={setView}
+        notify={notifyConflicts && notifyMemory}
+        onNotify={(on) => {
+          setNotifyConflicts(on);
+          setNotifyMemory(on);
+        }}
         theme={theme}
         onTheme={setTheme}
         onRefresh={refresh}
@@ -479,6 +563,54 @@ export default function App() {
         </p>
       )}
 
+      {view === "history" && <History revision={revision} />}
+      {view === "logs" && <LogView devices={devices} />}
+
+      {view === "automation" && (
+        <>
+          <Sweeps
+            sweeps={sweeps}
+            procs={shownProcs}
+            busy={busy}
+            onRun={runSweep}
+            onRemove={(name) =>
+              setSweeps((prev) => prev.filter((s) => s.name !== name))
+            }
+            onSave={(s) =>
+              setSweeps((prev) => [...prev.filter((x) => x.name !== s.name), s])
+            }
+            // Pre-fill from what is on screen: whatever is selected, else the
+            // current filter as a detail match. Writing a rule from scratch is
+            // the rare case.
+            suggestion={{
+              names: [
+                ...new Set(
+                  shownProcs
+                    .filter((p) => selected.has(p.pid))
+                    .map((p) => p.name),
+                ),
+              ],
+              runtimes: [],
+              detailContains: selected.size === 0 ? filter.trim() : "",
+            }}
+          />
+          <Profiles
+            profiles={profiles}
+            devices={devices}
+            busy={busy}
+            onLaunch={launchProfile}
+            onRemove={(name) =>
+              setProfiles((prev) => prev.filter((p) => p.name !== name))
+            }
+            onSave={(p) =>
+              setProfiles((prev) => [...prev.filter((x) => x.name !== p.name), p])
+            }
+          />
+        </>
+      )}
+
+      {view === "ports" && (
+      <>
       <DevicePanel
         title="Devices"
         devices={devices}
@@ -592,6 +724,8 @@ export default function App() {
                 onToggleSelect={toggleSelect}
                 onToggleAll={toggleAll}
                 memoryWarn={memoryWarnMb * 1_048_576}
+                openPid={detailPid}
+                onOpen={(p) => setDetailPid((cur) => (cur === p.pid ? null : p.pid))}
                 busy={busy}
                 onKill={(proc) =>
                   killMany(
@@ -606,6 +740,25 @@ export default function App() {
           )}
         </div>
       </section>
+
+      {detailPid !== null && (
+        <ProcessDetail
+          pid={detailPid}
+          onClose={() => setDetailPid(null)}
+          onKill={() => {
+            const proc = shownProcs.find((p) => p.pid === detailPid);
+            if (proc)
+              killMany(
+                `port:${proc.pid}`,
+                `Kill ${proc.name}?`,
+                [proc],
+                warningFor(proc.name),
+              ).then(() => setDetailPid(null));
+          }}
+        />
+      )}
+      </>
+      )}
 
       {confirmDialog}
     </div>

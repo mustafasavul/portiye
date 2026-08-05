@@ -4,7 +4,19 @@ import type { Theme } from "../theme";
 /** Thresholds offered for the heavy-process marker, in MB. */
 const THRESHOLDS = [100, 250, 500, 1000, 2000];
 
+export type View = "ports" | "automation" | "history" | "logs";
+const VIEWS: { id: View; label: string }[] = [
+  { id: "ports", label: "Ports" },
+  { id: "automation", label: "Automation" },
+  { id: "history", label: "History" },
+  { id: "logs", label: "Logs" },
+];
+
 export function Toolbar({
+  view,
+  onView,
+  notify,
+  onNotify,
   theme,
   onTheme,
   onRefresh,
@@ -14,6 +26,10 @@ export function Toolbar({
   memoryWarnMb,
   onMemoryWarnMb,
 }: {
+  view: View;
+  onView: (v: View) => void;
+  notify: boolean;
+  onNotify: (on: boolean) => void;
   theme: Theme;
   onTheme: (t: Theme) => void;
   onRefresh: () => void;
@@ -29,7 +45,34 @@ export function Toolbar({
         portiye<span className="wordmark__dot">.</span>
       </h1>
 
+      {/* Radio semantics: exactly one view is active, and arrow keys move
+          between them the way a tab strip should. */}
+      <div className="tabs" role="tablist" aria-label="View">
+        {VIEWS.map((v) => (
+          <button
+            key={v.id}
+            role="tab"
+            className="tab"
+            aria-selected={view === v.id}
+            data-active={view === v.id || undefined}
+            onClick={() => onView(v.id)}
+          >
+            {v.label}
+          </button>
+        ))}
+      </div>
+
       <div className="toolbar__spacer" />
+
+      <label className="toolbar__setting" title="Desktop notifications for port takeovers and heavy processes">
+        <input
+          type="checkbox"
+          className="pick"
+          checked={notify}
+          onChange={(e) => onNotify(e.target.checked)}
+        />
+        Notify
+      </label>
 
       <label className="toolbar__setting">
         Flag over

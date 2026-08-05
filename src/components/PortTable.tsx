@@ -12,6 +12,8 @@ export function PortTable({
   memoryWarn,
   busy,
   onKill,
+  onOpen,
+  openPid,
 }: {
   families: Family[];
   sort: Sort;
@@ -23,6 +25,8 @@ export function PortTable({
   memoryWarn: number;
   busy: string | null;
   onKill: (proc: Proc) => void;
+  onOpen: (proc: Proc) => void;
+  openPid: number | null;
 }) {
   const rows = families.flatMap((f) =>
     [f.root, ...f.children].map((proc, i) => ({ proc, child: i > 0 })),
@@ -79,6 +83,8 @@ export function PortTable({
             selected={selected.has(proc.pid)}
             onSelect={() => onToggleSelect(proc.pid)}
             hot={proc.memory >= memoryWarn}
+            open={openPid === proc.pid}
+            onOpen={() => onOpen(proc)}
             busy={busy === `port:${proc.pid}`}
             onKill={() => onKill(proc)}
           />
@@ -98,6 +104,8 @@ function ProcRow({
   selected,
   onSelect,
   hot,
+  open,
+  onOpen,
   busy,
   onKill,
 }: {
@@ -106,6 +114,8 @@ function ProcRow({
   selected: boolean;
   onSelect: () => void;
   hot: boolean;
+  open: boolean;
+  onOpen: () => void;
   busy: boolean;
   onKill: () => void;
 }) {
@@ -118,6 +128,7 @@ function ProcRow({
         "port",
         child && "port--child",
         selected && "port--selected",
+        open && "port--open",
         hot && "port--hot",
       ]
         .filter(Boolean)
@@ -136,7 +147,9 @@ function ProcRow({
         :{first}
         {rest.length > 0 && <span className="port__more">+{rest.length}</span>}
       </span>
-      <span className="port__text">
+      {/* The whole text cell opens the panel — a row-wide click would fight
+          the checkbox and the Kill button either side of it. */}
+      <button className="port__text port__open" onClick={onOpen} aria-expanded={open}>
         <span className="port__name">
           {child && (
             <span className="port__branch" aria-hidden="true">
@@ -150,7 +163,7 @@ function ProcRow({
             {proc.detail}
           </span>
         )}
-      </span>
+      </button>
       <span className="port__mem">
         {mb(proc.memory)}
         {/* The threshold is a user setting, so the marker explains itself

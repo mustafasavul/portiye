@@ -13,8 +13,10 @@ pub const TRAY_ID: &str = "portiye-tray";
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::new(app)?;
 
-    match crate::ports::get_listening_ports() {
-        Ok(ports) if !ports.is_empty() => {
+    // Reads the watcher's last scan — the tray must never run its own.
+    let ports = app.state::<crate::watch::Watch>();
+    match crate::watch::get_listening_ports(ports) {
+        ports if !ports.is_empty() => {
             for p in ports {
                 menu.append(&MenuItem::with_id(
                     app,
@@ -35,14 +37,13 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
                 )?)?;
             }
         }
-        Ok(_) => menu.append(&MenuItem::with_id(
+        _ => menu.append(&MenuItem::with_id(
             app,
             "none",
             "No listening ports",
             false,
             None::<&str>,
         )?)?,
-        Err(e) => menu.append(&MenuItem::with_id(app, "err", e, false, None::<&str>)?)?,
     }
 
     // Devices: the other half of the app, reachable without opening the window.
@@ -183,12 +184,7 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         .on_menu_event(|app, event| on_menu_event(app, event.id.as_ref()))
         .build(app)?;
 
-    // ponytail: poll every 5s instead of subscribing to port changes.
-    // Swap for an on-open refresh if the 5s window ever feels stale.
-    let app = app.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_secs(5));
-        refresh(&app);
-    });
+    // No polling loop here: the watcher owns the only one and calls `refresh`
+    // after every scan. Two loops meant two scans of the same machine.
     Ok(())
 }

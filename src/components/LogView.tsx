@@ -1,0 +1,142 @@
+import { useEffect, useMemo, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { Device } from "../types";
+
+/** Lines kept in memory. Beyond this the oldest are dropped. */
+const CAP = 2000;
+
+/**
+ * Live device logs — `simctl log stream` for iOS, `adb logcat` for Android.
+ *
+ * ponytail: a plain list, no virtualisation. 2000 rows of text is nothing for
+ * the DOM; reach for `react-window` only if the cap ever needs to grow.
+ */
+export function LogView({ devices }: { devices: Device[] }) {
+  const [source, setSource] = useState<string>("");
+  const [lines, setLines] = useState<string[]>([]);
+  const [filter, setFilter] = useState("");
+  const [follow, setFollow] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  // Only running devices have anything to stream.
+  const streamable = devices.filter(
+    (d) => d.running && (d.id.startsWith("sim:") || d.id.startsWith("avd:")),
+  );
+
+  useEffect(() => {
+    const un = listen<string>("log-line", (e) =>
+      setLines((prev) => {
+        const next = prev.length >= CAP ? prev.slice(prev.length - CAP + 1) : prev;
+        return [...next, e.payload];
+      }),
+    );
+    return () => {
+      un.then((f) => f());
+    };
+  }, []);
+
+  // Whatever is streaming must stop when this panel goes away, or the child
+  // process outlives the view that asked for it.
+  useEffect(() => () => void invoke("stop_logs").catch(() => {}), []);
+
+  const start = async (id: string) => {
+    setError(null);
+    setLines([]);
+    setSource(id);
+    if (!id) {
+      await invoke("stop_logs").catch(() => {});
+      return;
+    }
+    try {
+      // Android serials arrive as `avd:<name>`; the stream needs the serial.
+      await invoke("start_logs", { id });
+    } catch (e) {
+      setError(String(e));
+      setSource("");
+    }
+  };
+
+  const shown = useMemo(() => {
+    const q = filter.trim().toLowerCase();
+    return q ? lines.filter((l) => l.toLowerCase().includes(q)) : lines;
+  }, [lines, filter]);
+
+  useEffect(() => {
+    if (follow && boxRef.current)
+      boxRef.current.scrollTop = boxRef.current.scrollHeight;
+  }, [shown, follow]);
+
+  return (
+    <section className="panel panel--fill">
+      <div className="panel__head panel__head--tools">
+        <h2 className="panel__title">Device logs</h2>
+
+        <select
+          className="select"
+          value={source}
+          onChange={(e) => start(e.target.value)}
+          aria-label="Log source"
+        >
+          <option value="">Off</option>
+          {streamable.map((d) => (
+            <option key={d.id} value={logId(d)}>
+              {d.name}
+            </option>
+          ))}
+        </select>
+
+        <div className="field">
+          <input
+            className="field__input"
+            type="search"
+            value={filter}
+            onChange={(e) => setFilter(e.target.value)}
+            placeholder="Filter lines"
+            aria-label="Filter log lines"
+          />
+        </div>
+
+        <label className="toolbar__setting">
+          <input
+            type="checkbox"
+            className="pick"
+            checked={follow}
+            onChange={(e) => setFollow(e.target.checked)}
+          />
+          Follow
+        </label>
+
+        <span className="panel__count">
+          {filter ? `${shown.length} / ${lines.length}` : lines.length}
+        </span>
+      </div>
+
+      <div className="panel__scroll logs" ref={boxRef}>
+        {error && <p className="empty">{error}</p>}
+        {!error && streamable.length === 0 && (
+          <p className="empty">
+            Start a simulator or emulator to stream its log.
+          </p>
+        )}
+        {!error && streamable.length > 0 && !source && (
+          <p className="empty">Pick a device above to start streaming.</p>
+        )}
+        {shown.map((l, i) => (
+          <div className="logline" key={i}>
+            {l}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The Rust side wants `avd:<serial>`, but an Android device's id carries its
+ * AVD name — the serial lives in `meta` once it is running.
+ */
+function logId(d: Device) {
+  return d.id.startsWith("avd:") ? `avd:${d.meta}` : d.id;
+}
