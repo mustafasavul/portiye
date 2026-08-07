@@ -35,15 +35,27 @@ cd src-tauri && cargo fmt && cargo clippy
 
 ## Adding or fixing a translation
 
-Two files, no build step:
+No build step:
 
-- `src/i18n.tsx` — the window. Add your tag to `LOCALES`, copy the `en` block
-  and translate. Any key you omit falls back to English.
-- `src-tauri/src/i18n.rs` — the tray menu. Add your column to each `match` arm
-  and to `KNOWN`.
+- `src/locales/<tag>.ts` — the window. Copy `en.ts`, translate the values, and
+  add one row to `src/locales/index.ts`. Any key you omit falls back to
+  English, so a partial translation is welcome.
+- `src-tauri/src/i18n.rs` — the thirteen strings in the menu-bar menu. Add one
+  table for your language and one row to `LOCALES`.
+
+Set `rtl: true` on the registry row for a right-to-left language. Style with
+logical properties (`margin-inline-start`, `text-align: end`) so the layout
+keeps mirroring itself; `left` and `right` do not belong in this stylesheet.
 
 Keep `{name}` placeholders intact and leave technical terms (PID, CPU, port
-numbers) alone.
+numbers) alone. Then:
+
+```bash
+npm run check
+```
+
+It fails on a typo'd key, a dropped placeholder, or a language missing from
+the registry, and prints per-language coverage.
 
 ## Commit messages
 
@@ -51,8 +63,9 @@ Conventional commits: `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`.
 
 ## Releasing (maintainers)
 
-Bump the version in `package.json`, `src-tauri/Cargo.toml` and
-`src-tauri/tauri.conf.json`, then push a tag:
+Version lives in two files: `package.json` and `src-tauri/Cargo.toml`.
+`tauri.conf.json` reads it out of `package.json`, and `npm run check` fails if
+the two disagree. Bump both, then push a matching tag:
 
 ```bash
 git tag v0.2.0 && git push origin v0.2.0

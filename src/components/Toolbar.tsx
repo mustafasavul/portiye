@@ -99,7 +99,7 @@ export function Toolbar({
         aria-label={t("toolbar.language")}
         title={t("toolbar.language")}
       >
-        {Object.entries(LOCALES).map(([tag, name]) => (
+        {Object.entries(LOCALES).map(([tag, { name }]) => (
           <option key={tag} value={tag}>
             {name}
           </option>

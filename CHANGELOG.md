@@ -4,7 +4,35 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0]
+
+### Added
+
+- **23 more languages, for 28 in total**: العربية, አማርኛ, বাংলা, فارسی,
+  Filipino, Hausa, עברית, हिन्दी, Bahasa Indonesia, Қазақша, Кыргызча,
+  Bahasa Melayu, Nederlands, Português (Brasil), Русский, Kiswahili, ไทย,
+  Türkmençe, اردو, Oʻzbekcha, Tiếng Việt, Yorùbá, isiZulu — alongside the
+  existing English, Türkçe, Español, Deutsch and 中文.
+- **Right-to-left support.** العربية, עברית, فارسی and اردو mirror the whole
+  layout. The stylesheet moved to logical properties, so this is the direction
+  attribute doing the work rather than a second set of rules. Machine text —
+  ports, PIDs, byte counts, paths, log lines — is bidi-isolated so `:3000`
+  stays `:3000`.
+- `npm run check`: fails on a locale with a typo'd key, a dropped
+  `{placeholder}`, or one missing from the registry, and on a version mismatch
+  between `package.json` and `Cargo.toml`. Runs in CI.
+
+### Changed
+
+- **Translations are one file per language** under `src/locales/`, with
+  `src/locales/index.ts` as the only place that knows the list. Adding a
+  language is a copy of `en.ts` plus one row. The tray's thirteen strings moved
+  from a nested `match` to one flat table per language, with a test that no
+  table can silently lose a key.
+- `tauri.conf.json` reads its version from `package.json`, so the version now
+  lives in two files instead of three.
+
+## [0.1.1]
 
 ### Added
 

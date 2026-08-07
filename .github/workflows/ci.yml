@@ -20,6 +20,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Locale keys, placeholders and the version triple — things tsc cannot see.
+      - run: npm run check
       - run: npm run build
 
   rust:

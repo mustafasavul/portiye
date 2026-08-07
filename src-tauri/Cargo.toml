@@ -1,6 +1,6 @@
 [package]
 name = "portiye"
-version = "0.1.0"
+version = "0.2.0"
 description = "Menu-bar app for listening ports, the processes behind them, and local dev runtimes"
 authors = ["Mustafa Savul"]
 license = "MIT"

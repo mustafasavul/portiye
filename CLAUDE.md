@@ -12,7 +12,8 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 24 tests
+cd src-tauri && cargo test # 25 tests
+npm run check              # locale keys, placeholders, version triple
 ```
 
 Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
@@ -34,14 +35,15 @@ Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
 | `logs.rs` | Device log streaming, one stream at a time |
 | `export.rs` | JSON/CSV snapshot to `~/Downloads` |
 | `tray.rs` | Menu-bar menu: ports + devices, actionable without the window |
-| `i18n.rs` | The tray's strings, in five languages. `set_locale` is pushed by the window |
+| `i18n.rs` | The tray's thirteen strings in 28 languages. `set_locale` is pushed by the window |
 
 ### Frontend — `src/`
 
 `App.tsx` orchestrates; panels live in `components/`. `types.ts` holds shared
 shapes. `risk.ts` classifies dangerous kill targets, `runtime.ts` maps process
 names to language runtimes. `Confirm.tsx` is the confirmation dialog — **use it,
-never `window.confirm`**. `i18n.tsx` holds every user-facing string.
+never `window.confirm`**. `i18n.tsx` is the provider; the strings live one
+file per language in `locales/`, listed only in `locales/index.ts`.
 
 Three views (tabs): Ports · History · Device Logs.
 
@@ -74,12 +76,26 @@ few dev servers up. Ports and devices each live in a submenu; ports group into
 the same families the window shows, and a family with more than one process
 gets a nested submenu with a *Kill all* entry. Truncates at 30 families.
 
-**i18n is a dict and one `t()`**, not i18next. `src/i18n.tsx` for the window,
-`src-tauri/src/i18n.rs` for the tray — the tray is native and cannot reach the
-webview's table, so the window pushes the locale over `set_locale` and the menu
-is rebuilt. English is the fallback for any missing key, so a partial
-translation still ships a working app. `risk.ts` returns *keys*, not prose, so
-warnings translate at the point they are shown.
+**i18n is a dict and one `t()`**, not i18next. `src/locales/` for the window
+(one file per language, registry in `index.ts`), `src-tauri/src/i18n.rs` for
+the tray — the tray is native and cannot reach the webview's table, so the
+window pushes the locale over `set_locale` and the menu is rebuilt. English is
+the fallback for any missing key, so a partial translation still ships a
+working app. `risk.ts` returns *keys*, not prose, so warnings translate at the
+point they are shown. `scripts/check.mjs` catches the two things tsc cannot:
+a typo'd key and a dropped `{placeholder}`.
+
+**Locale files are imported statically**, all 28 of them. That is ~160 KB of
+the bundle; the app loads off local disk and the language switch has no
+loading state. Reach for `import()` only if the count doubles.
+
+**RTL is logical properties, not a mirrored stylesheet.** `dir="rtl"` on the
+root, and `margin-inline-start` / `text-align: end` / `inset-inline-end`
+everywhere. `left` and `right` do not belong in `index.css` — the two
+exceptions are the detail panel's drop shadow, which points somewhere, and the
+numeric columns whose alignment is fixed up under `[dir="rtl"]`. Machine text
+(ports, PIDs, paths, log lines) carries `direction: ltr; unicode-bidi: isolate`
+or bidi renders `:3000` as `3000:`.
 
 **`document.documentElement.lang` follows the locale.** Not decoration: CSS
 `text-transform: uppercase` is locale-aware, and Turkish "i" only uppercases to
@@ -155,5 +171,7 @@ The established pattern, and it catches real bugs:
   CI now compiles them; the platform behaviour is still unobserved by eye.
 - The tray's new submenu grouping was verified by unit test and by launching
   the real app without a panic — the menu itself has not been read by eye.
-- The five translations were written in one pass and have had no native review
-  beyond Turkish and English.
+- The 28 translations were written in one pass and have had no native review
+  beyond Turkish and English. Corrections are the easiest contribution to make.
+- RTL was verified in the Vite harness (Arabic, mirrored layout, no horizontal
+  scroll) but not yet in the real WKWebView window.

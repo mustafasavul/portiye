@@ -135,7 +135,7 @@ body {
 
 .field__kbd {
   position: absolute;
-  right: var(--space-xs);
+  inset-inline-end: var(--space-xs);
   pointer-events: none;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -278,11 +278,11 @@ body {
 /* A head that carries controls: the filter takes the free space, the sort and
  * the count sit after it rather than being pushed apart by two auto margins. */
 .panel__head--tools .field {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .panel__head--tools .panel__count {
-  margin-left: 0;
+  margin-inline-start: 0;
 }
 
 .panel__title {
@@ -300,7 +300,7 @@ body {
 }
 
 .panel__count {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
@@ -705,7 +705,7 @@ body {
 }
 
 .port__hot {
-  margin-left: var(--space-3xs);
+  margin-inline-start: var(--space-3xs);
   color: var(--color-warn);
 }
 
@@ -738,11 +738,11 @@ body {
 
 /* A child row is a process spawned by the row above it. */
 .port--child .port__text {
-  padding-left: var(--space-md);
+  padding-inline-start: var(--space-md);
 }
 
 .port__branch {
-  margin-right: var(--space-2xs);
+  margin-inline-end: var(--space-2xs);
   font-family: var(--font-mono);
   color: var(--color-muted);
 }
@@ -773,7 +773,7 @@ body {
 
 .port__mem {
   flex: 0 0 4rem;
-  text-align: right;
+  text-align: end;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
@@ -782,7 +782,7 @@ body {
 
 .port__pid {
   flex: 0 0 3.5rem;
-  text-align: right;
+  text-align: end;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
@@ -828,8 +828,8 @@ body {
 
 .port__mem .sort,
 .port__pid .sort {
-  /* right-aligned columns keep their header flush with the numbers */
-  margin-left: auto;
+  /* end-aligned columns keep their header flush with the numbers */
+  margin-inline-start: auto;
 }
 
 @media (hover: hover) {
@@ -882,7 +882,7 @@ body {
   }
 
   .device__actions {
-    margin-left: calc(7px + var(--space-sm));
+    margin-inline-start: calc(7px + var(--space-sm));
   }
 
   .port,
@@ -1114,7 +1114,7 @@ body {
 
 .event__at {
   flex-basis: 4.5rem;
-  text-align: right;
+  text-align: end;
 }
 
 /* ——— Process detail ————————————————————————————————————
@@ -1132,19 +1132,21 @@ body {
   padding: 0;
   background: none;
   font: inherit;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
 }
 
 .detail {
   position: fixed;
   inset-block: 0;
-  right: 0;
+  inset-inline-end: 0;
   width: min(28rem, 100vw);
   display: flex;
   flex-direction: column;
-  border-left: var(--rule) solid var(--color-rule-2);
+  border-inline-start: var(--rule) solid var(--color-rule-2);
   background: var(--color-paper);
+  /* The only physical value left: a shadow has a direction, and it has to
+     fall away from the panel on whichever edge the panel docked to. */
   box-shadow: -8px 0 24px var(--color-shadow);
   z-index: 20;
 }
@@ -1265,7 +1267,7 @@ body {
 }
 
 .tree__pid {
-  margin-left: auto;
+  margin-inline-start: auto;
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   font-variant-numeric: tabular-nums;
@@ -1308,4 +1310,49 @@ body {
   color: var(--color-ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* ── Right-to-left ──────────────────────────────────────────────────────────
+ * Everything else is written with logical properties, so the layout mirrors
+ * itself. A drop shadow cannot: it points somewhere. */
+[dir="rtl"] .detail {
+  box-shadow: 8px 0 24px var(--color-shadow);
+}
+
+/* Ports, PIDs, byte counts, paths and log lines are machine text: they read
+ * left to right in every language. Left to the bidi algorithm, ":3000" comes
+ * out "3000:" and "/Users/dev/shop" flips its leading slash to the end. */
+.port__number,
+.port__mem,
+.port__pid,
+.port__detail,
+.event__port,
+.event__pid,
+.event__at,
+.chip__mem,
+.device__meta,
+.tree__pid,
+.facts dd,
+.detail__pre,
+.mono-list li,
+.logline {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* Those cells force `direction: ltr`, which would drag `text-align: end` back
+ * to the right edge; in a mirrored row the numbers belong on the left. */
+[dir="rtl"] .port__mem,
+[dir="rtl"] .port__pid,
+[dir="rtl"] .event__at {
+  text-align: left;
+}
+
+/* Isolated blocks still line up with the column they sit in. */
+[dir="rtl"] .facts dd,
+[dir="rtl"] .detail__pre,
+[dir="rtl"] .mono-list li,
+[dir="rtl"] .logline,
+[dir="rtl"] .device__meta {
+  text-align: right;
 }

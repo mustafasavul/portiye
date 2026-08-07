@@ -29,7 +29,8 @@ macOS, Linux and Windows. The window is optional; the tray does the daily work.
 - **Device logs.** `simctl log stream` and `adb logcat`, filtered and
   exportable.
 - **Export.** JSON or CSV snapshot to `~/Downloads`.
-- **Five languages.** English, Türkçe, Español, Deutsch, 中文 — window and tray.
+- **28 languages, right-to-left included.** Window and tray, with full layout
+  mirroring for العربية, עברית, فارسی and اردو.
 - **Start at login**, toggled from the toolbar.
 
 ## Install
@@ -58,10 +59,14 @@ npm run tauri dev          # the real app
 npm run tauri build        # a bundle in src-tauri/target/release/bundle
 ```
 
-Tests:
+Tests and checks:
 
 ```bash
 cd src-tauri && cargo test
+```
+
+```bash
+npm run check
 ```
 
 `npm run dev` renders the UI in Chromium alone — fast for styling, but it is
@@ -79,11 +84,35 @@ same instance to compare.
 Everything else is in [CLAUDE.md](CLAUDE.md): the layout, the decisions worth
 not re-litigating, and the traps that cost real debugging time.
 
-## Adding a language
+## Languages
 
-`src/i18n.tsx` holds the window's strings and `src-tauri/src/i18n.rs` the
-tray's. Add your tag to `LOCALES`, copy the `en` block, translate. Missing keys
-fall back to English, so a partial translation still ships a working app.
+English · العربية · አማርኛ · বাংলা · Deutsch · Español · فارسی · Filipino ·
+Hausa · עברית · हिन्दी · Bahasa Indonesia · Қазақша · Кыргызча ·
+Bahasa Melayu · Nederlands · Português (Brasil) · Русский · Kiswahili · ไทย ·
+Türkmençe · Türkçe · اردو · Oʻzbekcha · Tiếng Việt · Yorùbá · 中文 · isiZulu
+
+The app picks your system language on first run and remembers what you choose
+after that.
+
+### Adding one
+
+One file per language in `src/locales/`, plus a row in `src/locales/index.ts`:
+
+```bash
+cp src/locales/en.ts src/locales/xx.ts   # then translate the values
+```
+
+Set `rtl: true` in the registry row for a right-to-left language; the layout
+mirrors itself from there, because the stylesheet uses logical properties
+rather than `left` and `right`.
+
+The thirteen strings in the menu-bar menu live separately in
+`src-tauri/src/i18n.rs` — the tray is native and cannot read the webview's
+table. `npm run check` verifies that no locale has a typo'd key or a dropped
+`{placeholder}`, and `cargo test` that no tray table is missing a string.
+
+Missing keys fall back to English, so a partial translation still ships a
+working app.
 
 ## Contributing
 
