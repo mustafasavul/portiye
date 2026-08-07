@@ -37,8 +37,8 @@
     "publisher": "Mustafa Savul",
     "copyright": "Copyright © 2026 Mustafa Savul",
     "category": "DeveloperTool",
-    "shortDescription": "Ports, processes and local dev runtimes in your menu bar.",
-    "longDescription": "portiye shows what is listening on your machine, which process owns it and where that process was started from, and lets you stop it without hunting for a PID. It also manages the emulators, simulators, containers and build daemons that opened half of those ports in the first place.",
+    "shortDescription": "Find what's using a port and stop it.",
+    "longDescription": "portiye shows every listening port on your machine, which process owns it, and which project that process was started from — then lets you stop it in one click, taking its child processes with it. A graphical answer to lsof -i, netstat -ano and EADDRINUSE. It also manages the Android emulators, iOS simulators, Docker containers, Ollama models and JVM build daemons that opened half of those ports. Lives in the menu bar; no telemetry, no account, no network calls. macOS, Linux and Windows, in 28 languages.",
     "licenseFile": "../LICENSE",
     "linux": {
       "deb": {

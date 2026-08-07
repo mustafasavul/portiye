@@ -1,11 +1,14 @@
 [package]
 name = "portiye"
 version = "0.2.0"
-description = "Menu-bar app for listening ports, the processes behind them, and local dev runtimes"
+description = "Find what's using a port and stop it: listening ports, the processes behind them, and local dev runtimes, from the menu bar"
 authors = ["Mustafa Savul"]
 license = "MIT"
 repository = "https://github.com/mustafasavul/portiye"
 homepage = "https://github.com/mustafasavul/portiye"
+readme = "../README.md"
+keywords = ["ports", "lsof", "process", "tauri", "devtools"]
+categories = ["development-tools", "command-line-utilities", "gui"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
