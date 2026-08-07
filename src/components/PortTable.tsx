@@ -71,7 +71,14 @@ export function PortTable({
             PID
           </SortHead>
         </span>
-        <span className="port__action" aria-hidden="true" />
+        {/* Group orders by how many processes belong together rather than by a
+            cell's value, but it is still a sort — it belongs with the others,
+            over the column its rows nest in. */}
+        <span className="port__action">
+          <SortHead sort={sort} onSort={onSort} k="family">
+            Group
+          </SortHead>
+        </span>
       </div>
 
       <ul className="ports">

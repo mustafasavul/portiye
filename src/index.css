@@ -585,6 +585,12 @@ body {
   color: var(--color-ink-2);
 }
 
+.confirm__note {
+  margin: 0 0 var(--space-md);
+  font-size: var(--text-sm);
+  color: var(--color-muted);
+}
+
 .confirm__warning {
   display: flex;
   gap: var(--space-xs);
@@ -1111,84 +1117,6 @@ body {
   text-align: right;
 }
 
-/* ——— Sweeps and profiles ——————————————————————————————— */
-
-.sweeps {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2xs);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.sweep {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-xs) var(--space-sm);
-  border: var(--rule) solid var(--color-rule);
-  border-radius: var(--radius-lg);
-  background: var(--color-paper-2);
-}
-
-.sweep__text {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.sweep__name {
-  display: block;
-  font-family: var(--font-display);
-  font-weight: 500;
-  letter-spacing: var(--track-tight);
-  color: var(--color-ink);
-}
-
-.sweep__rule {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-.draft {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  margin-bottom: var(--space-xs);
-  padding: var(--space-sm);
-  border: var(--rule) dashed var(--color-rule-2);
-  border-radius: var(--radius-lg);
-}
-
-.draft .field__input {
-  flex: 1 1 12rem;
-}
-
-.draft__rule {
-  flex: 1 1 100%;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-muted);
-}
-
-.draft__list {
-  flex: 1 1 100%;
-  height: auto;
-  padding: var(--space-2xs);
-}
-
-.draft__actions {
-  display: flex;
-  gap: var(--space-2xs);
-  margin-left: auto;
-}
-
 /* ——— Process detail ————————————————————————————————————
  * A sheet over the table rather than a side column: at 900px there is no room
  * for both, and the table is what you return to.
@@ -1368,6 +1296,11 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   line-height: 1.5;
+  /* Stated, not inherited: the webview's default makes log text undraggable,
+     and a log you cannot copy out of is half a log. */
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
 }
 
 .logline {

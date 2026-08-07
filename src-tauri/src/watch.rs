@@ -1,22 +1,20 @@
 //! The single poller.
 //!
 //! Everything that needs to know "what is listening right now" reads from here
-//! instead of scanning for itself: the window, the tray, the history, the
-//! notifications. One scan, one `System` — which is also what makes CPU
-//! percentages meaningful, since sysinfo needs two samples of the *same*
-//! instance to compare.
+//! instead of scanning for itself: the window, the tray, the history. One scan,
+//! one `System` — which is also what makes CPU percentages meaningful, since
+//! sysinfo needs two samples of the *same* instance to compare.
 //!
-//! It runs whether or not a window is open, so a port takeover that happens
-//! while portiye sits in the tray still produces a notification.
+//! It runs whether or not a window is open, so the history fills in while
+//! portiye sits in the tray.
 
 use crate::ports::PortEntry;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sysinfo::System;
 use tauri::{AppHandle, Emitter, Manager, Runtime};
-use tauri_plugin_notification::NotificationExt;
 
 /// How many events to keep. At a few dozen a day this is weeks of history.
 const HISTORY_CAP: usize = 500;
@@ -37,38 +35,17 @@ pub struct PortEvent {
     pub previous: Option<String>,
 }
 
-#[derive(Deserialize, Clone, Copy, Debug)]
-pub struct WatchSettings {
-    /// Notify when a listener's resident memory crosses this, in MB.
-    pub memory_warn_mb: u64,
-    pub notify_conflicts: bool,
-    pub notify_memory: bool,
-}
-
-impl Default for WatchSettings {
-    fn default() -> Self {
-        Self {
-            memory_warn_mb: 500,
-            notify_conflicts: true,
-            notify_memory: true,
-        }
-    }
-}
-
 #[derive(Default)]
 struct Inner {
     ports: Vec<PortEntry>,
     history: VecDeque<PortEvent>,
     /// port -> (when it closed, who held it) — the raw material for takeovers.
     recently_closed: HashMap<u16, (u64, String)>,
-    /// PIDs already warned about, so one fat process does not notify every 5s.
-    warned: Vec<u32>,
 }
 
 pub struct Watch {
     system: Mutex<System>,
     inner: Mutex<Inner>,
-    settings: Mutex<WatchSettings>,
 }
 
 impl Watch {
@@ -76,7 +53,6 @@ impl Watch {
         Self {
             system: Mutex::new(System::new_all()),
             inner: Mutex::new(Inner::default()),
-            settings: Mutex::new(WatchSettings::default()),
         }
     }
 }
@@ -145,14 +121,9 @@ fn diff(
     events
 }
 
-fn notify<R: Runtime>(app: &AppHandle<R>, title: &str, body: &str) {
-    let _ = app.notification().builder().title(title).body(body).show();
-}
-
-/// One poll: scan, diff, record, notify, publish.
+/// One poll: scan, diff, record, publish.
 fn tick<R: Runtime>(app: &AppHandle<R>) {
     let watch = app.state::<Watch>();
-    let settings = *watch.settings.lock().unwrap();
 
     let scanned = {
         let mut sys = watch.system.lock().unwrap();
@@ -164,8 +135,6 @@ fn tick<R: Runtime>(app: &AppHandle<R>) {
     };
 
     let at = now_ms();
-    let mut fresh_conflicts = Vec::new();
-    let mut fresh_heavy = Vec::new();
 
     {
         let mut inner = watch.inner.lock().unwrap();
@@ -176,13 +145,8 @@ fn tick<R: Runtime>(app: &AppHandle<R>) {
 
         let events = diff(&prev, &scanned, &mut inner.recently_closed, at);
         // The first scan would otherwise report every existing port as newly
-        // opened — noise, and a burst of notifications on launch.
+        // opened, which is noise rather than history.
         if !first_run {
-            for e in &events {
-                if e.kind == "taken" {
-                    fresh_conflicts.push(e.clone());
-                }
-            }
             for e in events {
                 inner.history.push_front(e);
             }
@@ -191,52 +155,7 @@ fn tick<R: Runtime>(app: &AppHandle<R>) {
             }
         }
 
-        let limit = settings.memory_warn_mb * 1_048_576;
-        let alive: Vec<u32> = scanned.iter().map(|e| e.pid).collect();
-        for e in &scanned {
-            if e.memory >= limit && !inner.warned.contains(&e.pid) {
-                inner.warned.push(e.pid);
-                if !first_run {
-                    fresh_heavy.push(e.clone());
-                }
-            }
-        }
-        // Forget dead PIDs so the same name warns again next time it starts.
-        inner.warned.retain(|pid| alive.contains(pid));
         inner.ports = scanned;
-    }
-
-    if settings.notify_conflicts {
-        for e in fresh_conflicts {
-            notify(
-                app,
-                &format!("Port :{} taken over", e.port),
-                &format!(
-                    "{} (pid {}) took :{} from {}",
-                    e.name,
-                    e.pid,
-                    e.port,
-                    e.previous.as_deref().unwrap_or("another process")
-                ),
-            );
-        }
-    }
-    if settings.notify_memory {
-        for e in fresh_heavy {
-            notify(
-                app,
-                &format!("{} is using {} MB", e.name, e.memory / 1_048_576),
-                &format!(
-                    "Listening on :{}{}",
-                    e.port,
-                    if e.detail.is_empty() {
-                        String::new()
-                    } else {
-                        format!(" · {}", e.detail)
-                    }
-                ),
-            );
-        }
     }
 
     let _ = app.emit("ports-changed", ());
@@ -268,11 +187,6 @@ pub fn get_port_history(watch: tauri::State<Watch>) -> Vec<PortEvent> {
 #[tauri::command]
 pub fn clear_port_history(watch: tauri::State<Watch>) {
     watch.inner.lock().unwrap().history.clear();
-}
-
-#[tauri::command]
-pub fn set_watch_settings(watch: tauri::State<Watch>, settings: WatchSettings) {
-    *watch.settings.lock().unwrap() = settings;
 }
 
 #[cfg(test)]

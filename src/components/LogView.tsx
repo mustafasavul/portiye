@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { CloseIcon } from "../icons";
 import type { Device } from "../types";
 
 /** Lines kept in memory. Beyond this the oldest are dropped. */
@@ -18,6 +19,7 @@ export function LogView({ devices }: { devices: Device[] }) {
   const [filter, setFilter] = useState("");
   const [follow, setFollow] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   // Only running devices have anything to stream.
@@ -43,6 +45,7 @@ export function LogView({ devices }: { devices: Device[] }) {
 
   const start = async (id: string) => {
     setError(null);
+    setNotice(null);
     setLines([]);
     setSource(id);
     if (!id) {
@@ -64,9 +67,48 @@ export function LogView({ devices }: { devices: Device[] }) {
   }, [lines, filter]);
 
   useEffect(() => {
-    if (follow && boxRef.current)
+    // Scrolling out from under a selection cancels it, so following yields to
+    // whatever the user is dragging over right now.
+    const sel = window.getSelection();
+    const selecting =
+      sel &&
+      !sel.isCollapsed &&
+      boxRef.current?.contains(sel.anchorNode as Node | null);
+    if (follow && !selecting && boxRef.current)
       boxRef.current.scrollTop = boxRef.current.scrollHeight;
   }, [shown, follow]);
+
+  const stamp = () => new Date().toISOString().slice(0, 19);
+
+  /** Whatever is on screen — the filter is part of what you asked for. */
+  const copy = async () => {
+    const text = shown.join("\n");
+    try {
+      await navigator.clipboard.writeText(text);
+      setNotice(`Copied ${shown.length} lines`);
+    } catch {
+      // The async clipboard needs a permission the webview does not always
+      // grant; the selection-based path is older and asks for nothing.
+      setNotice(
+        legacyCopy(text)
+          ? `Copied ${shown.length} lines`
+          : "Could not reach the clipboard — select the lines and press ⌘C",
+      );
+    }
+  };
+
+  const exportLines = async () => {
+    try {
+      const path = await invoke<string>("export_logs", {
+        lines: shown,
+        source: source || "logs",
+        stamp: stamp(),
+      });
+      setNotice(`Exported ${shown.length} lines → ${path}`);
+    } catch (e) {
+      setNotice(String(e));
+    }
+  };
 
   return (
     <section className="panel panel--fill">
@@ -108,10 +150,35 @@ export function LogView({ devices }: { devices: Device[] }) {
           Follow
         </label>
 
+        <button className="btn" disabled={shown.length === 0} onClick={copy}>
+          Copy
+        </button>
+        <button
+          className="btn"
+          disabled={shown.length === 0}
+          onClick={exportLines}
+          title="Write these lines to your Downloads folder"
+        >
+          Export
+        </button>
+
         <span className="panel__count">
           {filter ? `${shown.length} / ${lines.length}` : lines.length}
         </span>
       </div>
+
+      {notice && (
+        <p className="banner banner--ok" role="status">
+          <span className="banner__text">{notice}</span>
+          <button
+            className="btn btn--icon"
+            onClick={() => setNotice(null)}
+            aria-label="Dismiss"
+          >
+            <CloseIcon />
+          </button>
+        </p>
+      )}
 
       <div className="panel__scroll logs" ref={boxRef}>
         {error && <p className="empty">{error}</p>}
@@ -131,6 +198,19 @@ export function LogView({ devices }: { devices: Device[] }) {
       </div>
     </section>
   );
+}
+
+/** `execCommand` is deprecated, and still the only copy WKWebView never blocks. */
+function legacyCopy(text: string) {
+  const box = document.createElement("textarea");
+  box.value = text;
+  box.style.position = "fixed";
+  box.style.opacity = "0";
+  document.body.append(box);
+  box.select();
+  const ok = document.execCommand("copy");
+  box.remove();
+  return ok;
 }
 
 /**

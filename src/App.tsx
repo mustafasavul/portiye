@@ -11,14 +11,12 @@ import { useShortcuts } from "./hooks/useShortcuts";
 import { Toolbar } from "./components/Toolbar";
 import { DevicePanel } from "./components/DevicePanel";
 import { FastKill } from "./components/FastKill";
-import { PortTable, SortHead } from "./components/PortTable";
+import { PortTable } from "./components/PortTable";
 import { History } from "./components/History";
 import { ProcessDetail } from "./components/ProcessDetail";
 import { LogView } from "./components/LogView";
-import { Sweeps, type Sweep } from "./components/Sweeps";
-import { Profiles, type Profile } from "./components/Profiles";
 import { CloseIcon } from "./icons";
-import { defaultDir, mb } from "./types";
+import { defaultDir, mb, THRESHOLDS, thresholdLabel } from "./types";
 import type {
   Avd,
   Device,
@@ -50,20 +48,14 @@ export default function App() {
   const filterRef = useRef<HTMLInputElement>(null);
   const [ask, confirmDialog] = useConfirm();
 
-  const [view, setView] = useState<"ports" | "automation" | "history" | "logs">(
-    "ports",
-  );
+  const [view, setView] = useState<"ports" | "history" | "logs">("ports");
   const [detailPid, setDetailPid] = useState<number | null>(null);
   /** Bumped on every watcher event so the history view refetches. */
   const [revision, setRevision] = useState(0);
 
   const [savedFilters, setSavedFilters] = usePersisted<string[]>("filters", []);
-  const [sweeps, setSweeps] = usePersisted<Sweep[]>("sweeps", []);
-  const [profiles, setProfiles] = usePersisted<Profile[]>("profiles", []);
   const [format, setFormat] = usePersisted<"json" | "csv">("format", "json");
   const [memoryWarnMb, setMemoryWarnMb] = usePersisted("memoryWarnMb", 500);
-  const [notifyConflicts, setNotifyConflicts] = usePersisted("notifyConflicts", true);
-  const [notifyMemory, setNotifyMemory] = usePersisted("notifyMemory", true);
 
   /**
    * Ports only. This is a cached read on the Rust side — the watcher already
@@ -122,18 +114,6 @@ export default function App() {
       un.then((f) => f());
     };
   }, [refresh, refreshPorts, refreshDevices]);
-
-  // The watcher notifies from Rust, so it needs the same threshold the table
-  // paints with — otherwise the badge and the notification disagree.
-  useEffect(() => {
-    invoke("set_watch_settings", {
-      settings: {
-        memory_warn_mb: memoryWarnMb,
-        notify_conflicts: notifyConflicts,
-        notify_memory: notifyMemory,
-      },
-    }).catch(() => {});
-  }, [memoryWarnMb, notifyConflicts, notifyMemory]);
 
   /** Runs an action with a busy lock, surfacing failures in the banner. */
   const run = async (id: string, action: () => Promise<void>) => {
@@ -385,6 +365,9 @@ export default function App() {
         secondary: p.detail || undefined,
       })),
       warning,
+      // Whatever these spawned goes with them: killing a `dotnet watch` or
+      // `npm run dev` on its own leaves the real server running and orphaned.
+      note: "Processes they started are killed too.",
       confirmLabel: `Kill ${procs.length}`,
     });
     if (!ok) return;
@@ -394,6 +377,11 @@ export default function App() {
       const report = await invoke<KillReport>("kill_processes", {
         pids: procs.map((p) => p.pid),
       });
+
+      if (report.children.length > 0)
+        setNotice({
+          text: `Killed ${report.killed.length} + ${report.children.length} child ${report.children.length === 1 ? "process" : "processes"}`,
+        });
 
       if (report.denied.length > 0) {
         const elevate = await ask({
@@ -429,20 +417,6 @@ export default function App() {
       procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
     );
   };
-
-  const runSweep = (sweep: Sweep, matched: Proc[]) =>
-    killMany(
-      `sweep:${sweep.name}`,
-      `Run “${sweep.name}” — kill ${matched.length} processes?`,
-      matched,
-      matched.map((p) => warningFor(p.name)).find(Boolean) ?? null,
-    );
-
-  /** Start every idle device in a profile, one after another. */
-  const launchProfile = (profile: Profile, targets: Device[]) =>
-    run(`profile:${profile.name}`, async () => {
-      for (const d of targets) if (d.toggle) await d.toggle();
-    });
 
   const exportSnapshot = async () => {
     try {
@@ -511,19 +485,12 @@ export default function App() {
       <Toolbar
         view={view}
         onView={setView}
-        notify={notifyConflicts && notifyMemory}
-        onNotify={(on) => {
-          setNotifyConflicts(on);
-          setNotifyMemory(on);
-        }}
         theme={theme}
         onTheme={setTheme}
         onRefresh={refresh}
         format={format}
         onFormat={setFormat}
         onExport={exportSnapshot}
-        memoryWarnMb={memoryWarnMb}
-        onMemoryWarnMb={setMemoryWarnMb}
       />
 
       {error && (
@@ -566,48 +533,6 @@ export default function App() {
       {view === "history" && <History revision={revision} />}
       {view === "logs" && <LogView devices={devices} />}
 
-      {view === "automation" && (
-        <>
-          <Sweeps
-            sweeps={sweeps}
-            procs={shownProcs}
-            busy={busy}
-            onRun={runSweep}
-            onRemove={(name) =>
-              setSweeps((prev) => prev.filter((s) => s.name !== name))
-            }
-            onSave={(s) =>
-              setSweeps((prev) => [...prev.filter((x) => x.name !== s.name), s])
-            }
-            // Pre-fill from what is on screen: whatever is selected, else the
-            // current filter as a detail match. Writing a rule from scratch is
-            // the rare case.
-            suggestion={{
-              names: [
-                ...new Set(
-                  shownProcs
-                    .filter((p) => selected.has(p.pid))
-                    .map((p) => p.name),
-                ),
-              ],
-              runtimes: [],
-              detailContains: selected.size === 0 ? filter.trim() : "",
-            }}
-          />
-          <Profiles
-            profiles={profiles}
-            devices={devices}
-            busy={busy}
-            onLaunch={launchProfile}
-            onRemove={(name) =>
-              setProfiles((prev) => prev.filter((p) => p.name !== name))
-            }
-            onSave={(p) =>
-              setProfiles((prev) => [...prev.filter((x) => x.name !== p.name), p])
-            }
-          />
-        </>
-      )}
 
       {view === "ports" && (
       <>
@@ -675,11 +600,24 @@ export default function App() {
             <span className="field__kbd">⌘K</span>
           </div>
 
-          {/* Group is not a column — it orders by how many processes belong
-              together — so it sits with the panel, not in the header row. */}
-          <SortHead sort={sort} onSort={toggleSort} k="family">
-            Group
-          </SortHead>
+          {/* The threshold paints rows in this table and nothing else, so it
+              belongs to the table rather than to the window chrome. */}
+          <label className="toolbar__setting">
+            Flag over
+            <select
+              className="select"
+              value={memoryWarnMb}
+              onChange={(e) => setMemoryWarnMb(Number(e.target.value))}
+              aria-label="Flag processes using more memory than"
+            >
+              {THRESHOLDS.map((n) => (
+                <option key={n} value={n}>
+                  {thresholdLabel(n)}
+                </option>
+              ))}
+            </select>
+          </label>
+
           <span className="panel__count">
             {filter ? `${visibleCount} / ${ports.length}` : ports.length}
           </span>

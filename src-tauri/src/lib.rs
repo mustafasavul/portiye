@@ -12,14 +12,12 @@ mod tray;
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
         .manage(watch::Watch::new())
         .manage(logs::Logs::new())
         .invoke_handler(tauri::generate_handler![
             watch::get_listening_ports,
             watch::get_port_history,
             watch::clear_port_history,
-            watch::set_watch_settings,
             procinfo::process_detail,
             logs::start_logs,
             logs::stop_logs,
@@ -37,6 +35,7 @@ pub fn run() {
             sim::erase_simulator,
             sim::restart_simulator,
             export::export_snapshot,
+            export::export_logs,
             runtimes::list_runtimes,
             runtimes::runtime_action,
         ])

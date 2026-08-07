@@ -250,6 +250,10 @@ pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
 #[derive(Serialize, Default, Debug)]
 pub struct KillReport {
     pub killed: Vec<u32>,
+    /// Descendants taken down with them. A dev server is a supervisor —
+    /// `dotnet watch`, `npm run dev`, `nodemon` — and killing only the listener
+    /// leaves the real server running, orphaned onto init.
+    pub children: Vec<u32>,
     /// Alive, but the OS refused — almost always another user's process.
     pub denied: Vec<u32>,
     /// Already gone by the time we got there. Not an error.
@@ -268,20 +272,83 @@ fn elevation_hint() -> String {
     }
 }
 
+/// Everything `root` spawned, breadth-first, `root` excluded.
+///
+/// Our own PID is never returned: portiye is a child of whatever shell or IDE
+/// started it, and a sweep that reaches upward must not take the app with it.
+fn descendants(children_of: &HashMap<u32, Vec<u32>>, root: u32) -> Vec<u32> {
+    let own = std::process::id();
+    let mut out = Vec::new();
+    let mut queue = vec![root];
+    while let Some(pid) = queue.pop() {
+        for &kid in children_of.get(&pid).into_iter().flatten() {
+            if kid == own || out.contains(&kid) {
+                continue;
+            }
+            out.push(kid);
+            queue.push(kid);
+        }
+    }
+    out
+}
+
+fn children_map(sys: &System) -> HashMap<u32, Vec<u32>> {
+    let mut map: HashMap<u32, Vec<u32>> = HashMap::new();
+    for (pid, proc) in sys.processes() {
+        if let Some(parent) = proc.parent() {
+            map.entry(parent.as_u32()).or_default().push(pid.as_u32());
+        }
+    }
+    map
+}
+
 /// Kill many at once, reporting each outcome rather than failing on the first.
+///
+/// Each target takes its descendants with it: a `dotnet watch` or `npm run dev`
+/// listener is a supervisor, and killing it alone leaves the actual server
+/// process alive, reparented to init, still holding its port.
 #[tauri::command]
 pub fn kill_processes(pids: Vec<u32>) -> KillReport {
     let sys = System::new_all();
+    let children_of = children_map(&sys);
     let mut report = KillReport {
         elevation: elevation_hint(),
         ..Default::default()
     };
+    let mut done: HashSet<u32> = HashSet::new();
 
     for pid in pids {
+        if !done.insert(pid) {
+            continue;
+        }
+        // The parent goes first: a supervisor still running when its child dies
+        // simply starts a new one.
         match sys.process(Pid::from_u32(pid)) {
-            None => report.missing.push(pid),
+            None => {
+                // Its children were reparented to init long ago, so there is no
+                // tree left to walk from here.
+                report.missing.push(pid);
+                continue;
+            }
             Some(proc) if proc.kill() => report.killed.push(pid),
-            Some(_) => report.denied.push(pid),
+            Some(_) => {
+                // Refused, so the tree stays whole. This is also the guard that
+                // keeps a stray pid 1 from meaning "everything I own".
+                report.denied.push(pid);
+                continue;
+            }
+        }
+
+        for kid in descendants(&children_of, pid) {
+            if !done.insert(kid) {
+                continue;
+            }
+            match sys.process(Pid::from_u32(kid)) {
+                // A descendant that died with its parent is the normal case.
+                None => {}
+                Some(proc) if proc.kill() => report.children.push(kid),
+                Some(_) => report.denied.push(kid),
+            }
         }
     }
     report
@@ -297,6 +364,25 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
     if pids.is_empty() {
         return Ok(());
     }
+    // The refused process almost certainly owns refused children too; asking
+    // for the password twice for the same tree is the worse outcome.
+    let sys = System::new_all();
+    let children_of = children_map(&sys);
+    let mut pids = pids;
+    let mut seen: HashSet<u32> = pids.iter().copied().collect();
+    for pid in pids.clone() {
+        // "Everything init spawned" is the whole machine, and with a password
+        // behind it the OS would not stop us.
+        if pid <= 1 {
+            continue;
+        }
+        for kid in descendants(&children_of, pid) {
+            if seen.insert(kid) {
+                pids.push(kid);
+            }
+        }
+    }
+
     let list = pids
         .iter()
         .map(u32::to_string)
@@ -352,15 +438,15 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
     }
 }
 
+/// One process, the tray's and the runtime panel's way in. Same path as the
+/// table's kill, so the descendant sweep can never apply to only one of them.
 #[tauri::command]
 pub fn kill_process(pid: u32) -> Result<(), String> {
-    let sys = System::new_all();
-    let proc = sys
-        .process(Pid::from_u32(pid))
-        .ok_or_else(|| format!("no process with pid {pid}"))?;
-    // sysinfo sends SIGKILL on unix / TerminateProcess on Windows.
-    if proc.kill() {
+    let report = kill_processes(vec![pid]);
+    if report.killed.contains(&pid) {
         Ok(())
+    } else if report.missing.contains(&pid) {
+        Err(format!("no process with pid {pid}"))
     } else {
         Err(format!("could not kill pid {pid} (permission denied?)"))
     }
@@ -439,6 +525,44 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
             "a pid that does not exist is missing, not denied"
         );
         assert!(!report.elevation.is_empty(), "the UI needs something to say");
+        assert!(
+            report.children.is_empty(),
+            "a refused pid must not expand into its descendants — pid 1's tree is the machine"
+        );
+    }
+
+    /// The `dotnet watch` shape: killing the listener alone left the real server
+    /// running, orphaned onto init, still holding the port.
+    #[test]
+    fn kill_takes_the_whole_tree_down() {
+        // `sh` stays alive on the second sleep while the first runs as its child.
+        let mut parent = Command::new("sh")
+            .args(["-c", "sleep 60 & sleep 60"])
+            .spawn()
+            .expect("spawn a shell to kill");
+        let pid = parent.id();
+
+        // The child needs to exist before we look for it.
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let before = System::new_all();
+        let mut kid = descendants(&children_map(&before), pid);
+        kid.sort_unstable();
+        assert!(!kid.is_empty(), "the shell should have spawned a sleep");
+
+        let report = kill_processes(vec![pid]);
+        let mut killed_kids = report.children.clone();
+        killed_kids.sort_unstable();
+        assert_eq!(report.killed, vec![pid]);
+        assert_eq!(killed_kids, kid, "every child dies with the parent");
+
+        let _ = parent.wait();
+        let after = System::new_all();
+        for k in kid {
+            assert!(
+                after.process(Pid::from_u32(k)).is_none(),
+                "pid {k} outlived the parent we killed"
+            );
+        }
     }
 
     #[test]
@@ -458,3 +582,4 @@ Active Connections
         );
     }
 }
+

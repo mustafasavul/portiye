@@ -51,6 +51,12 @@ fn to_csv(rows: &[Value]) -> String {
     out
 }
 
+/// Anything that reaches a filename: a stamp, or a device id like `sim:UDID`.
+/// A stray separator here would write outside Downloads.
+fn safe_name(raw: &str) -> String {
+    raw.replace(['/', '\\', ':', '.'], "-")
+}
+
 fn downloads_dir() -> PathBuf {
     crate::ports::home_dir()
         .map(|h| PathBuf::from(h).join("Downloads"))
@@ -72,8 +78,23 @@ pub fn export_snapshot(rows: Vec<Value>, format: String, stamp: String) -> Resul
     };
 
     // The stamp is used in a filename, so it must not carry a path separator.
-    let safe = stamp.replace(['/', '\\', ':', '.'], "-");
-    let path = downloads_dir().join(format!("portiye-{safe}.{format}"));
+    let path = downloads_dir().join(format!("portiye-{}.{format}", safe_name(&stamp)));
+
+    std::fs::write(&path, body).map_err(|e| format!("could not write {}: {e}", path.display()))?;
+    Ok(path.to_string_lossy().into_owned())
+}
+
+/// Whatever the log panel is showing, as a plain `.log` file next to the
+/// snapshots. Same deal as `export_snapshot`: Downloads, path handed back.
+#[tauri::command]
+pub fn export_logs(lines: Vec<String>, source: String, stamp: String) -> Result<String, String> {
+    let path = downloads_dir().join(format!(
+        "portiye-{}-{}.log",
+        safe_name(&source),
+        safe_name(&stamp)
+    ));
+    let mut body = lines.join("\n");
+    body.push('\n');
 
     std::fs::write(&path, body).map_err(|e| format!("could not write {}: {e}", path.display()))?;
     Ok(path.to_string_lossy().into_owned())
@@ -103,6 +124,12 @@ mod tests {
             "detail,name,port\n\"~/a,b\",node,3000\n,postgres,5432\n",
             "a missing field must become an empty cell, not a shifted row"
         );
+    }
+
+    #[test]
+    fn a_device_id_cannot_escape_the_downloads_folder() {
+        assert_eq!(safe_name("sim:UDID-1"), "sim-UDID-1");
+        assert_eq!(safe_name("../../etc/passwd"), "------etc-passwd");
     }
 
     #[test]

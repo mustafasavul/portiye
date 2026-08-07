@@ -17,6 +17,8 @@ export type Ask = {
   lines?: AskLine[];
   /** Amber block above the buttons when the target is risky. */
   warning?: string | null;
+  /** Quiet line stating what else the action reaches. */
+  note?: string;
   confirmLabel: string;
 };
 
@@ -70,6 +72,8 @@ export function useConfirm(): [(a: Ask) => Promise<boolean>, React.ReactNode] {
           ))}
         </ul>
       )}
+
+      {pending.note && <p className="confirm__note">{pending.note}</p>}
 
       {pending.warning && (
         <p className="confirm__warning">

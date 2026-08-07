@@ -34,6 +34,8 @@ export type KillGroup = {
 
 export type KillReport = {
   killed: number[];
+  /** Descendants killed alongside the targets — dev servers supervise. */
+  children: number[];
   denied: number[];
   missing: number[];
   elevation: string;
@@ -94,3 +96,9 @@ export const mb = (bytes: number) =>
   bytes >= 1_073_741_824
     ? `${(bytes / 1_073_741_824).toFixed(1)} GB`
     : `${Math.round(bytes / 1_048_576)} MB`;
+
+/** Thresholds offered for the heavy-process marker, in MB. */
+export const THRESHOLDS = [100, 250, 500, 1000, 2000];
+
+export const thresholdLabel = (mb: number) =>
+  mb >= 1000 ? `${mb / 1000} GB` : `${mb} MB`;
