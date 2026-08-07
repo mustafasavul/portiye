@@ -1,0 +1,45 @@
+name: Bug report
+description: Something behaves differently than it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: And what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start a dev server on :3000
+        2. Open the tray menu
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: portiye version
+      placeholder: 0.1.0, or a commit hash
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Platform
+      options: [macOS, Linux, Windows]
+    validations:
+      required: true
+  - type: input
+    id: osversion
+    attributes:
+      label: OS version
+      placeholder: macOS 15.6, Ubuntu 24.04, Windows 11 23H2
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Screenshots, terminal output, the process involved.

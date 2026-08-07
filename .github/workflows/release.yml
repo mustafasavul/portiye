@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  bundle:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS (Apple silicon)
+            args: --target aarch64-apple-darwin
+            target: aarch64-apple-darwin
+          - os: macos-latest
+            label: macOS (Intel)
+            args: --target x86_64-apple-darwin
+            target: x86_64-apple-darwin
+          - os: ubuntu-22.04
+            label: Linux
+            args: ""
+            target: ""
+          - os: windows-latest
+            label: Windows
+            args: ""
+            target: ""
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: ${{ matrix.label }}
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+            librsvg2-dev patchelf libssl-dev
+
+      - run: npm ci
+
+      # Opens (or reuses) one draft release and uploads every platform's
+      # bundles into it. Publishing is a deliberate manual step.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: portiye ${{ github.ref_name }}
+          releaseBody: "See CHANGELOG.md for what changed."
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}

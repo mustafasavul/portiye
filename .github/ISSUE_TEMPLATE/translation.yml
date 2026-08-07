@@ -1,0 +1,20 @@
+name: Translation
+description: A wrong string, or a language portiye should speak.
+labels: [i18n]
+body:
+  - type: input
+    id: language
+    attributes:
+      label: Language
+      placeholder: Türkçe, Français, 日本語…
+    validations:
+      required: true
+  - type: textarea
+    id: detail
+    attributes:
+      label: What is wrong or missing
+      description: |
+        For a fix, name the key from `src/i18n.tsx` or `src-tauri/src/i18n.rs`
+        and what it should say.
+    validations:
+      required: true
