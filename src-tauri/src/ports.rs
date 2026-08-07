@@ -32,16 +32,11 @@ pub struct PortEntry {
 /// listening socket. Falls back to `pid` itself when nothing above it listens.
 ///
 /// `parent_of` only has to cover the ancestry chain, not the whole system.
-fn family_root(
-    pid: u32,
-    parent_of: &HashMap<u32, u32>,
-    listeners: &HashSet<u32>,
-) -> u32 {
+fn family_root(pid: u32, parent_of: &HashMap<u32, u32>, listeners: &HashSet<u32>) -> u32 {
     let mut cur = pid;
     let mut root = pid;
     let mut seen = HashSet::from([pid]);
-    loop {
-        let Some(&parent) = parent_of.get(&cur) else { break };
+    while let Some(&parent) = parent_of.get(&cur) {
         // Stop on 0, self, or a revisit — a cycle must yield one stable answer,
         // not an answer that depends on how many times we went round.
         if parent == 0 || !seen.insert(parent) {
@@ -246,7 +241,6 @@ pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
     Ok(entries)
 }
 
-
 #[derive(Serialize, Default, Debug)]
 pub struct KillReport {
     pub killed: Vec<u32>,
@@ -263,13 +257,14 @@ pub struct KillReport {
 }
 
 fn elevation_hint() -> String {
-    if cfg!(target_os = "macos") {
-        "macOS will ask for your password.".into()
+    crate::i18n::t(if cfg!(target_os = "macos") {
+        "elevate.macos"
     } else if cfg!(target_os = "windows") {
-        "Windows will show a User Account Control prompt.".into()
+        "elevate.windows"
     } else {
-        "Your desktop will ask for authentication.".into()
-    }
+        "elevate.other"
+    })
+    .into()
 }
 
 /// Everything `root` spawned, breadth-first, `root` excluded.
@@ -393,9 +388,7 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
     let out = cmd("osascript")
         .args([
             "-e",
-            &format!(
-                "do shell script \"/bin/kill -9 {list}\" with administrator privileges"
-            ),
+            &format!("do shell script \"/bin/kill -9 {list}\" with administrator privileges"),
         ])
         .output();
 
@@ -417,9 +410,7 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
             .args([
                 "-NoProfile",
                 "-Command",
-                &format!(
-                    "Start-Process taskkill -ArgumentList '/F',{args} -Verb RunAs -Wait"
-                ),
+                &format!("Start-Process taskkill -ArgumentList '/F',{args} -Verb RunAs -Wait"),
             ])
             .output()
     };
@@ -473,15 +464,27 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
     #[test]
     fn detail_prefers_avd_then_bundle_then_cwd() {
         assert_eq!(
-            detail_for("/sdk/emulator/qemu -avd Medium_Phone -no-snapshot", None, None),
+            detail_for(
+                "/sdk/emulator/qemu -avd Medium_Phone -no-snapshot",
+                None,
+                None
+            ),
             "AVD Medium Phone"
         );
         assert_eq!(
-            detail_for("/Applications/Antigravity IDE.app/Contents/MacOS/x", None, None),
+            detail_for(
+                "/Applications/Antigravity IDE.app/Contents/MacOS/x",
+                None,
+                None
+            ),
             "Antigravity IDE"
         );
         assert_eq!(
-            detail_for("node vite", Some("/Users/me/Projects/portiye"), Some("/Users/me")),
+            detail_for(
+                "node vite",
+                Some("/Users/me/Projects/portiye"),
+                Some("/Users/me")
+            ),
             "~/Projects/portiye"
         );
         assert_eq!(detail_for("launchd", Some("/"), None), "");
@@ -496,8 +499,16 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
 
         assert_eq!(family_root(30, &parents, &listeners), 10);
         assert_eq!(family_root(20, &parents, &listeners), 10);
-        assert_eq!(family_root(10, &parents, &listeners), 10, "root is its own family");
-        assert_eq!(family_root(40, &parents, &listeners), 40, "unrelated stays alone");
+        assert_eq!(
+            family_root(10, &parents, &listeners),
+            10,
+            "root is its own family"
+        );
+        assert_eq!(
+            family_root(40, &parents, &listeners),
+            40,
+            "unrelated stays alone"
+        );
     }
 
     #[test]
@@ -509,7 +520,7 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
     #[test]
     fn kill_processes_reports_each_outcome() {
         // Our own child, so the test never touches anything it does not own.
-        let child = Command::new("sleep")
+        let mut child = Command::new("sleep")
             .arg("60")
             .spawn()
             .expect("spawn a sleep to kill");
@@ -524,11 +535,16 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
             vec![4_294_967_294],
             "a pid that does not exist is missing, not denied"
         );
-        assert!(!report.elevation.is_empty(), "the UI needs something to say");
+        assert!(
+            !report.elevation.is_empty(),
+            "the UI needs something to say"
+        );
         assert!(
             report.children.is_empty(),
             "a refused pid must not expand into its descendants — pid 1's tree is the machine"
         );
+        // Reap it: a killed child stays a zombie until someone waits on it.
+        let _ = child.wait();
     }
 
     /// The `dotnet watch` shape: killing the listener alone left the real server
@@ -582,4 +598,3 @@ Active Connections
         );
     }
 }
-

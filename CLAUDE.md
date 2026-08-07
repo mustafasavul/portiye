@@ -12,7 +12,7 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 19 tests
+cd src-tauri && cargo test # 24 tests
 ```
 
 Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
@@ -34,15 +34,16 @@ Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
 | `logs.rs` | Device log streaming, one stream at a time |
 | `export.rs` | JSON/CSV snapshot to `~/Downloads` |
 | `tray.rs` | Menu-bar menu: ports + devices, actionable without the window |
+| `i18n.rs` | The tray's strings, in five languages. `set_locale` is pushed by the window |
 
 ### Frontend — `src/`
 
 `App.tsx` orchestrates; panels live in `components/`. `types.ts` holds shared
 shapes. `risk.ts` classifies dangerous kill targets, `runtime.ts` maps process
 names to language runtimes. `Confirm.tsx` is the confirmation dialog — **use it,
-never `window.confirm`**.
+never `window.confirm`**. `i18n.tsx` holds every user-facing string.
 
-Four views (tabs): Ports · Automation (sweeps + profiles) · History · Logs.
+Three views (tabs): Ports · History · Device Logs.
 
 ---
 
@@ -66,6 +67,27 @@ here. Move it to a file only if these need to be hand-edited or synced.
 
 **Auto-kill is a saved *sweep*, not a background rule.** It matches on demand
 and always shows the confirmation. Nothing is ever killed silently.
+
+**The tray is four items tall, not one per PID.** A flat item per listening
+process unrolled the menu past the bottom of the screen on any machine with a
+few dev servers up. Ports and devices each live in a submenu; ports group into
+the same families the window shows, and a family with more than one process
+gets a nested submenu with a *Kill all* entry. Truncates at 30 families.
+
+**i18n is a dict and one `t()`**, not i18next. `src/i18n.tsx` for the window,
+`src-tauri/src/i18n.rs` for the tray — the tray is native and cannot reach the
+webview's table, so the window pushes the locale over `set_locale` and the menu
+is rebuilt. English is the fallback for any missing key, so a partial
+translation still ships a working app. `risk.ts` returns *keys*, not prose, so
+warnings translate at the point they are shown.
+
+**`document.documentElement.lang` follows the locale.** Not decoration: CSS
+`text-transform: uppercase` is locale-aware, and Turkish "i" only uppercases to
+"İ" when the document says it is Turkish.
+
+**Start at login has no state of its own.** `tauri-plugin-autostart` writes a
+LaunchAgent / registry key / .desktop file, and that file *is* the truth. A
+mirror in `localStorage` would only be a second source to disagree with it.
 
 **Devices, runtimes, containers share one row component.** They all have the
 same shape: name, platform, meta, running, start/stop, destructive action.
@@ -126,7 +148,12 @@ The established pattern, and it catches real bugs:
 - The tray's device entries were verified by test, not by eye.
 - Notifications need a real takeover or a crossed threshold to observe; not yet
   seen firing in anger.
-- No CI. Tests are run by hand.
-- Windows and Linux have never been compiled — `llvm-rc` is missing locally, so
-  cross-target checks fail for environment reasons, not code reasons. The
-  platform-specific paths were reviewed by hand only.
+- GitHub Actions runs `npm run build`, `cargo fmt --check`, `cargo clippy -D
+  warnings` and `cargo test` on macOS, Linux and Windows. Nothing runs the UI.
+- Windows and Linux have never been compiled *locally* — `llvm-rc` is missing
+  here, so cross-target checks fail for environment reasons, not code reasons.
+  CI now compiles them; the platform behaviour is still unobserved by eye.
+- The tray's new submenu grouping was verified by unit test and by launching
+  the real app without a panic — the menu itself has not been read by eye.
+- The five translations were written in one pass and have had no native review
+  beyond Turkish and English.

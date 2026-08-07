@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import { mb } from "../types";
 import type { KillGroup } from "../types";
 
@@ -15,6 +16,7 @@ export function FastKill({
   busy: string | null;
   onKill: (g: KillGroup) => void;
 }) {
+  const t = useT();
   if (groups.length === 0) return null;
 
   return (
@@ -29,22 +31,31 @@ export function FastKill({
             aria-busy={busy === id}
             onClick={() => onKill(g)}
             title={
-              g.warning ??
-              (g.kind === "runtime"
-                ? `Kill every ${g.name} process: ${[
-                    ...new Set(g.procs.map((p) => p.name)),
-                  ].join(", ")}`
-                : `Kill all ${g.procs.length} ${g.name} processes`)
+              g.warning
+                ? t(g.warning)
+                : g.kind === "runtime"
+                  ? t("fastkill.titleRuntime", {
+                      name: g.name,
+                      names: [...new Set(g.procs.map((p) => p.name))].join(", "),
+                    })
+                  : t("fastkill.titleName", {
+                      n: g.procs.length,
+                      name: g.name,
+                    })
             }
           >
-            <span className="chip__verb">Kill {g.procs.length}</span>
+            <span className="chip__verb">
+              {t("fastkill.kill", { n: g.procs.length })}
+            </span>
             {g.warning && (
               <span className="chip__warn" aria-hidden="true">
                 ⚠
               </span>
             )}
             <span className="chip__name">{g.name}</span>
-            {g.kind === "runtime" && <span className="chip__kind">runtime</span>}
+            {g.kind === "runtime" && (
+              <span className="chip__kind">{t("fastkill.runtime")}</span>
+            )}
             <span className="chip__mem">{mb(g.memory)}</span>
           </button>
         );

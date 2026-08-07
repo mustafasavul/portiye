@@ -6,40 +6,37 @@
  * at the editor you are reading this in is a much worse day, so those names
  * carry an explicit warning into the confirmation.
  */
-const RULES: { match: RegExp; warning: string }[] = [
+import type { Key } from "./i18n";
+
+const RULES: { match: RegExp; warning: Key }[] = [
   {
     // Databases and brokers: killing them mid-write is how you lose data.
     match: /^(postgres|mysqld?|mariadb|mongod|redis|memcached|elasticsearch|rabbitmq|clickhouse)/i,
-    warning:
-      "This is a database or message broker. Killing it mid-write can lose or corrupt uncommitted data — stop it through its own service manager instead.",
+    warning: "risk.database",
   },
   {
     // The user is very likely reading this inside one of them.
     match: /^(Electron|Code|Cursor|Antigravity|JetBrains|idea|webstorm|pycharm|sublime|zed|jetbrains-toolbox)/i,
-    warning:
-      "This looks like an editor or IDE — quite possibly the one you have open. Killing it drops unsaved work.",
+    warning: "risk.editor",
   },
   {
     // OS plumbing. Nothing good comes of this.
     match: /^(launchd|systemd|kernel_task|WindowServer|mDNSResponder|rapportd|sshd|coreaudiod|loginwindow|svchost|lsass|csrss|wininit)/i,
-    warning:
-      "This is an operating-system service, not a dev process. Killing it can log you out or destabilise the machine.",
+    warning: "risk.system",
   },
   {
     // Container and VM hosts: the children die with them.
     match: /^(docker|com\.docker|containerd|colima|podman|qemu|VBoxHeadless|vmware)/i,
-    warning:
-      "This hosts containers or virtual machines. Everything running inside it goes down too.",
+    warning: "risk.container",
   },
   {
     // Device tooling — recoverable, but the emulator session is gone.
     match: /^(emulator|adb|netsimd|Simulator|simdiskimaged)/i,
-    warning:
-      "This backs a running emulator or simulator. The device session ends and unsaved app state is lost.",
+    warning: "risk.device",
   },
 ];
 
-/** The warning for a process name, or null when it is ordinary dev noise. */
-export function warningFor(name: string): string | null {
+/** The warning key for a process name, or null when it is ordinary dev noise. */
+export function warningFor(name: string): Key | null {
   return RULES.find((r) => r.match.test(name))?.warning ?? null;
 }

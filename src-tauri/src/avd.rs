@@ -17,7 +17,8 @@ pub struct Avd {
 /// Root of the Android SDK. A GUI-launched app does not inherit the shell's
 /// PATH or env, so guess the standard layout before trusting either.
 fn sdk_root() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("ANDROID_HOME").or_else(|| std::env::var_os("ANDROID_SDK_ROOT"))
+    if let Some(p) =
+        std::env::var_os("ANDROID_HOME").or_else(|| std::env::var_os("ANDROID_SDK_ROOT"))
     {
         return Some(PathBuf::from(p));
     }

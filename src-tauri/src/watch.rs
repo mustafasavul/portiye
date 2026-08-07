@@ -181,7 +181,14 @@ pub fn get_listening_ports(watch: tauri::State<Watch>) -> Vec<PortEntry> {
 
 #[tauri::command]
 pub fn get_port_history(watch: tauri::State<Watch>) -> Vec<PortEvent> {
-    watch.inner.lock().unwrap().history.iter().cloned().collect()
+    watch
+        .inner
+        .lock()
+        .unwrap()
+        .history
+        .iter()
+        .cloned()
+        .collect()
 }
 
 #[tauri::command]

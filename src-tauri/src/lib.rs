@@ -1,17 +1,24 @@
 mod avd;
 mod export;
+mod i18n;
 mod logs;
-mod procinfo;
-mod watch;
 mod ports;
+mod procinfo;
 mod runtimes;
 mod sim;
 mod tray;
+mod watch;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        // Login item. `LaunchAgent` is the only macOS option that survives a
+        // sandboxed / notarised build; Windows and Linux ignore the argument.
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(watch::Watch::new())
         .manage(logs::Logs::new())
         .invoke_handler(tauri::generate_handler![
@@ -38,6 +45,7 @@ pub fn run() {
             export::export_logs,
             runtimes::list_runtimes,
             runtimes::runtime_action,
+            i18n::set_locale,
         ])
         .setup(|app| {
             tray::init(app.handle())?;

@@ -1,3 +1,5 @@
+import type { Key } from "./i18n";
+
 /** Shapes shared across the panels. Kept here so components stop importing
  *  each other just to borrow a type. */
 
@@ -29,7 +31,8 @@ export type KillGroup = {
   kind: "name" | "runtime";
   procs: Proc[];
   memory: number;
-  warning: string | null;
+  /** Translation key for the risk warning, resolved where it is shown. */
+  warning: Key | null;
 };
 
 export type KillReport = {

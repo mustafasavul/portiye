@@ -1,3 +1,4 @@
+import { useT } from "../i18n";
 import type { Ask } from "../Confirm";
 import type { Device } from "../types";
 
@@ -17,6 +18,7 @@ export function DevicePanel({
   ask: (a: Ask) => Promise<boolean>;
   empty?: string;
 }) {
+  const t = useT();
   const running = devices.filter((d) => d.running).length;
 
   return (
@@ -24,7 +26,7 @@ export function DevicePanel({
       <div className="panel__head">
         <h2 className="panel__title">{title}</h2>
         <span className="panel__count">
-          {running} / {devices.length} running
+          {t("devices.count", { running, total: devices.length })}
         </span>
       </div>
       <div className="panel__body">
@@ -42,7 +44,7 @@ export function DevicePanel({
                 onReset={async () => {
                   if (!d.reset) return;
                   const ok = await ask({
-                    title: `Reset ${d.name}?`,
+                    title: t("device.resetTitle", { name: d.name }),
                     warning: d.resetWarning,
                     confirmLabel: d.resetLabel,
                   });
@@ -70,6 +72,7 @@ function DeviceRow({
   onRestart: () => void;
   onReset: () => void;
 }) {
+  const t = useT();
   return (
     <li className={device.running ? "device device--live" : "device"}>
       <span
@@ -104,9 +107,9 @@ function DeviceRow({
             disabled={busy}
             aria-busy={busy}
             onClick={onRestart}
-            title={`Stop and start ${device.name} again, keeping its data`}
+            title={t("device.restartTitle", { name: device.name })}
           >
-            Restart
+            {t("device.restart")}
           </button>
         )}
         {device.reset && (

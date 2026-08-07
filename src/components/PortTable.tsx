@@ -1,4 +1,5 @@
 import { SortArrowIcon } from "../icons";
+import { useT, type Key } from "../i18n";
 import { defaultDir, mb } from "../types";
 import type { Family, Proc, Sort, SortKey } from "../types";
 
@@ -28,6 +29,7 @@ export function PortTable({
   onOpen: (proc: Proc) => void;
   openPid: number | null;
 }) {
+  const t = useT();
   const rows = families.flatMap((f) =>
     [f.root, ...f.children].map((proc, i) => ({ proc, child: i > 0 })),
   );
@@ -48,36 +50,28 @@ export function PortTable({
               if (el) el.indeterminate = someSelected;
             }}
             onChange={onToggleAll}
-            aria-label={allSelected ? "Clear selection" : "Select all shown"}
+            aria-label={t(
+              allSelected ? "table.clearSelection" : "table.selectAll",
+            )}
           />
         </span>
         <span className="port__number">
-          <SortHead sort={sort} onSort={onSort} k="port">
-            Port
-          </SortHead>
+          <SortHead sort={sort} onSort={onSort} k="port" label="table.port" />
         </span>
         <span className="port__text">
-          <SortHead sort={sort} onSort={onSort} k="name">
-            Process
-          </SortHead>
+          <SortHead sort={sort} onSort={onSort} k="name" label="table.process" />
         </span>
         <span className="port__mem">
-          <SortHead sort={sort} onSort={onSort} k="memory">
-            Memory
-          </SortHead>
+          <SortHead sort={sort} onSort={onSort} k="memory" label="table.memory" />
         </span>
         <span className="port__pid">
-          <SortHead sort={sort} onSort={onSort} k="pid">
-            PID
-          </SortHead>
+          <SortHead sort={sort} onSort={onSort} k="pid" label="table.pid" />
         </span>
         {/* Group orders by how many processes belong together rather than by a
             cell's value, but it is still a sort — it belongs with the others,
             over the column its rows nest in. */}
         <span className="port__action">
-          <SortHead sort={sort} onSort={onSort} k="family">
-            Group
-          </SortHead>
+          <SortHead sort={sort} onSort={onSort} k="family" label="table.group" />
         </span>
       </div>
 
@@ -126,6 +120,7 @@ function ProcRow({
   busy: boolean;
   onKill: () => void;
 }) {
+  const t = useT();
   const [first, ...rest] = proc.ports;
   const allPorts = proc.ports.map((p) => `:${p}`).join(", ");
 
@@ -147,7 +142,7 @@ function ProcRow({
           className="pick"
           checked={selected}
           onChange={onSelect}
-          aria-label={`Select ${proc.name}, pid ${proc.pid}`}
+          aria-label={t("table.selectRow", { name: proc.name, pid: proc.pid })}
         />
       </span>
       <span className="port__number" title={rest.length ? allPorts : undefined}>
@@ -176,7 +171,7 @@ function ProcRow({
         {/* The threshold is a user setting, so the marker explains itself
             rather than leaving a bare colour to be decoded. */}
         {hot && (
-          <span className="port__hot" title="Above your memory threshold">
+          <span className="port__hot" title={t("table.hot")}>
             ⚠
           </span>
         )}
@@ -188,9 +183,9 @@ function ProcRow({
           disabled={busy}
           aria-busy={busy}
           onClick={onKill}
-          aria-label={`Kill ${proc.name} on ${allPorts}`}
+          aria-label={t("table.killAria", { name: proc.name, ports: allPorts })}
         >
-          {busy ? "…" : "Kill"}
+          {busy ? "…" : t("table.kill")}
         </button>
       </span>
     </li>
@@ -205,21 +200,17 @@ export function SortHead({
   sort,
   onSort,
   k,
-  children,
+  label,
 }: {
   sort: Sort;
   onSort: (k: SortKey) => void;
   k: SortKey;
-  children: string;
+  label: Key;
 }) {
+  const t = useT();
   const active = sort.key === k;
-  const next = active
-    ? sort.dir === 1
-      ? "descending"
-      : "ascending"
-    : defaultDir(k) === 1
-      ? "ascending"
-      : "descending";
+  const ascending = active ? sort.dir === -1 : defaultDir(k) === 1;
+  const column = t(label);
 
   return (
     <button
@@ -227,9 +218,12 @@ export function SortHead({
       data-active={active || undefined}
       data-dir={active && sort.dir === -1 ? "desc" : undefined}
       onClick={() => onSort(k)}
-      aria-label={`Sort by ${children.toLowerCase()}, ${next}`}
+      aria-label={t("table.sortAria", {
+        column,
+        dir: t(ascending ? "table.sortAsc" : "table.sortDesc"),
+      })}
     >
-      {children}
+      {column}
       <SortArrowIcon />
     </button>
   );

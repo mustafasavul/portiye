@@ -1,8 +1,11 @@
 [package]
 name = "portiye"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Menu-bar app for listening ports, the processes behind them, and local dev runtimes"
+authors = ["Mustafa Savul"]
+license = "MIT"
+repository = "https://github.com/mustafasavul/portiye"
+homepage = "https://github.com/mustafasavul/portiye"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -23,4 +26,5 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sysinfo = "0.39.6"
+tauri-plugin-autostart = "2.5.1"
 

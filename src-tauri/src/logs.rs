@@ -45,8 +45,7 @@ pub fn start_logs<R: Runtime>(app: AppHandle<R>, id: String) -> Result<(), Strin
         "sim" => {
             let mut c = crate::ports::cmd("xcrun");
             c.args([
-                "simctl", "spawn", target, "log", "stream", "--level", "info",
-                "--style", "compact",
+                "simctl", "spawn", target, "log", "stream", "--level", "info", "--style", "compact",
             ]);
             c
         }

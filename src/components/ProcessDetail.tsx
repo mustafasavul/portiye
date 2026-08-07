@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CloseIcon } from "../icons";
+import { useT } from "../i18n";
 import { mb } from "../types";
 
 type Relative = { pid: number; name: string };
@@ -45,6 +46,7 @@ export function ProcessDetail({
   onClose: () => void;
   onKill: () => void;
 }) {
+  const t = useT();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,38 +64,38 @@ export function ProcessDetail({
   }, [pid]);
 
   return (
-    <aside className="detail" aria-label={`Details for process ${pid}`}>
+    <aside className="detail" aria-label={t("detail.aria", { pid })}>
       <div className="detail__head">
         <h2 className="detail__title">{detail?.name ?? `pid ${pid}`}</h2>
-        <button className="btn btn--icon" onClick={onClose} aria-label="Close details">
+        <button className="btn btn--icon" onClick={onClose} aria-label={t("detail.close")}>
           <CloseIcon />
         </button>
       </div>
 
       <div className="detail__body">
         {error && <p className="empty">{error}</p>}
-        {!detail && !error && <p className="empty">Reading…</p>}
+        {!detail && !error && <p className="empty">{t("detail.reading")}</p>}
 
         {detail && (
           <>
             <dl className="facts">
               <dt>PID</dt>
               <dd>{detail.pid}</dd>
-              <dt>CPU</dt>
+              <dt>{t("detail.cpu")}</dt>
               <dd>{detail.cpu.toFixed(1)}%</dd>
-              <dt>Memory</dt>
+              <dt>{t("detail.memory")}</dt>
               <dd>{mb(detail.memory)}</dd>
-              <dt>Uptime</dt>
+              <dt>{t("detail.uptime")}</dt>
               <dd>{duration(detail.uptime)}</dd>
               {detail.user && (
                 <>
-                  <dt>User</dt>
+                  <dt>{t("detail.user")}</dt>
                   <dd>{detail.user}</dd>
                 </>
               )}
               {detail.cwd && (
                 <>
-                  <dt>Directory</dt>
+                  <dt>{t("detail.directory")}</dt>
                   <dd className="facts__wrap">{detail.cwd}</dd>
                 </>
               )}
@@ -101,12 +103,12 @@ export function ProcessDetail({
 
             {detail.command && (
               <>
-                <h3 className="detail__section">Command</h3>
+                <h3 className="detail__section">{t("detail.command")}</h3>
                 <pre className="detail__pre">{detail.command}</pre>
               </>
             )}
 
-            <h3 className="detail__section">Process tree</h3>
+            <h3 className="detail__section">{t("detail.tree")}</h3>
             <ul className="tree">
               {detail.ancestors.map((a, i) => (
                 <li key={a.pid} style={{ paddingLeft: `${i}rem` }}>
@@ -133,14 +135,14 @@ export function ProcessDetail({
             </ul>
 
             <h3 className="detail__section">
-              Connections
+              {t("detail.connections")}
               <span className="detail__count">{detail.connections.length}</span>
             </h3>
             {detail.lsof_error ? (
               // Saying why beats an empty list that reads as "none".
               <p className="empty">{detail.lsof_error}</p>
             ) : detail.connections.length === 0 ? (
-              <p className="empty">No open sockets.</p>
+              <p className="empty">{t("detail.noSockets")}</p>
             ) : (
               <ul className="mono-list">
                 {detail.connections.map((c, i) => (
@@ -150,11 +152,11 @@ export function ProcessDetail({
             )}
 
             <h3 className="detail__section">
-              Open files
+              {t("detail.openFiles")}
               <span className="detail__count">{detail.open_files}</span>
             </h3>
             {detail.files_sample.length === 0 ? (
-              <p className="empty">No regular files open.</p>
+              <p className="empty">{t("detail.noFiles")}</p>
             ) : (
               <ul className="mono-list">
                 {detail.files_sample.map((f, i) => (
@@ -162,7 +164,9 @@ export function ProcessDetail({
                 ))}
                 {detail.open_files > detail.files_sample.length && (
                   <li className="mono-list__more">
-                    and {detail.open_files - detail.files_sample.length} more
+                    {t("detail.andMore", {
+                      n: detail.open_files - detail.files_sample.length,
+                    })}
                   </li>
                 )}
               </ul>
@@ -173,7 +177,7 @@ export function ProcessDetail({
 
       <div className="detail__foot">
         <button className="btn btn--solid-danger" onClick={onKill}>
-          Kill this process
+          {t("detail.kill")}
         </button>
       </div>
     </aside>

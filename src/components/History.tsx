@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n, type T } from "../i18n";
 
 export type PortEvent = {
   at: number;
@@ -11,17 +12,19 @@ export type PortEvent = {
   previous: string | null;
 };
 
-const time = new Intl.DateTimeFormat(undefined, {
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit",
-});
+/** Locale-aware, so the clock reads the way the rest of the app does. */
+const timeFormat = (locale: string) =>
+  new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
 
 /** "3m ago" beats a bare clock for anything inside the last hour. */
-function ago(at: number, now: number) {
+function ago(at: number, now: number, t: T, time: Intl.DateTimeFormat) {
   const s = Math.max(0, Math.round((now - at) / 1000));
-  if (s < 60) return `${s}s ago`;
-  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 60) return t("history.secondsAgo", { n: s });
+  if (s < 3600) return t("history.minutesAgo", { n: Math.round(s / 60) });
   return time.format(at);
 }
 
@@ -38,6 +41,8 @@ const PAGE = 100;
  * nobody is looking.
  */
 export function History({ revision }: { revision: number }) {
+  const { t, locale } = useI18n();
+  const time = useMemo(() => timeFormat(locale), [locale]);
   const [events, setEvents] = useState<PortEvent[]>([]);
   const [now, setNow] = useState(() => Date.now());
   const [limit, setLimit] = useState(PAGE);
@@ -56,7 +61,7 @@ export function History({ revision }: { revision: number }) {
   return (
     <section className="panel panel--fill">
       <div className="panel__head">
-        <h2 className="panel__title">Port history</h2>
+        <h2 className="panel__title">{t("history.title")}</h2>
         <button
           className="btn"
           disabled={events.length === 0}
@@ -64,7 +69,7 @@ export function History({ revision }: { revision: number }) {
             invoke("clear_port_history").then(() => setEvents([]))
           }
         >
-          Clear
+          {t("history.clear")}
         </button>
         <span className="panel__count">{events.length}</span>
       </div>
@@ -72,8 +77,7 @@ export function History({ revision }: { revision: number }) {
       <div className="panel__scroll">
         {events.length === 0 ? (
           <p className="empty">
-            Nothing has opened or closed since portiye started. Events appear
-            here as they happen, including while the window is closed.
+            {t("history.empty")}
           </p>
         ) : (
           <ul className="events">
@@ -87,14 +91,17 @@ export function History({ revision }: { revision: number }) {
                   <span className="event__name">
                     {e.name}
                     {e.kind === "taken" && e.previous && (
-                      <span className="event__from"> took over from {e.previous}</span>
+                      <span className="event__from">
+                        {" "}
+                        {t("history.tookOver", { name: e.previous })}
+                      </span>
                     )}
                   </span>
                   {e.detail && <span className="event__detail">{e.detail}</span>}
                 </span>
                 <span className="event__pid">{e.pid}</span>
                 <span className="event__at" title={time.format(e.at)}>
-                  {ago(e.at, now)}
+                  {ago(e.at, now, t, time)}
                 </span>
               </li>
             ))}
@@ -104,10 +111,12 @@ export function History({ revision }: { revision: number }) {
                   className="btn"
                   onClick={() => setLimit((n) => n + PAGE)}
                 >
-                  Show {Math.min(PAGE, events.length - limit)} older
+                  {t("history.showOlder", {
+                    n: Math.min(PAGE, events.length - limit),
+                  })}
                 </button>
                 <span className="event__at">
-                  {events.length - limit} more
+                  {t("history.more", { n: events.length - limit })}
                 </span>
               </li>
             )}

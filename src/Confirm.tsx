@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "./i18n";
 
 /**
  * A confirmation the app draws itself.
@@ -26,6 +27,7 @@ type Pending = Ask & { resolve: (ok: boolean) => void };
 
 /** Returns [ask, dialog] — `ask` resolves true only on explicit confirmation. */
 export function useConfirm(): [(a: Ask) => Promise<boolean>, React.ReactNode] {
+  const t = useT();
   const [pending, setPending] = useState<Pending | null>(null);
   const ref = useRef<HTMLDialogElement>(null);
 
@@ -86,7 +88,7 @@ export function useConfirm(): [(a: Ask) => Promise<boolean>, React.ReactNode] {
         {/* Cancel is focused first: the destructive button is never one
             stray Return away. */}
         <button className="btn" autoFocus onClick={() => settle(false)}>
-          Cancel
+          {t("confirm.cancel")}
         </button>
         <button className="btn btn--solid-danger" onClick={() => settle(true)}>
           {pending.confirmLabel}

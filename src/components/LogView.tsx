@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { CloseIcon } from "../icons";
+import { useT } from "../i18n";
 import type { Device } from "../types";
 
 /** Lines kept in memory. Beyond this the oldest are dropped. */
@@ -14,6 +15,7 @@ const CAP = 2000;
  * the DOM; reach for `react-window` only if the cap ever needs to grow.
  */
 export function LogView({ devices }: { devices: Device[] }) {
+  const t = useT();
   const [source, setSource] = useState<string>("");
   const [lines, setLines] = useState<string[]>([]);
   const [filter, setFilter] = useState("");
@@ -85,14 +87,14 @@ export function LogView({ devices }: { devices: Device[] }) {
     const text = shown.join("\n");
     try {
       await navigator.clipboard.writeText(text);
-      setNotice(`Copied ${shown.length} lines`);
+      setNotice(t("logs.copied", { n: shown.length }));
     } catch {
       // The async clipboard needs a permission the webview does not always
       // grant; the selection-based path is older and asks for nothing.
       setNotice(
         legacyCopy(text)
-          ? `Copied ${shown.length} lines`
-          : "Could not reach the clipboard — select the lines and press ⌘C",
+          ? t("logs.copied", { n: shown.length })
+          : t("logs.copyFailed"),
       );
     }
   };
@@ -104,7 +106,7 @@ export function LogView({ devices }: { devices: Device[] }) {
         source: source || "logs",
         stamp: stamp(),
       });
-      setNotice(`Exported ${shown.length} lines → ${path}`);
+      setNotice(t("logs.exported", { n: shown.length, path }));
     } catch (e) {
       setNotice(String(e));
     }
@@ -113,15 +115,15 @@ export function LogView({ devices }: { devices: Device[] }) {
   return (
     <section className="panel panel--fill">
       <div className="panel__head panel__head--tools">
-        <h2 className="panel__title">Device logs</h2>
+        <h2 className="panel__title">{t("logs.title")}</h2>
 
         <select
           className="select"
           value={source}
           onChange={(e) => start(e.target.value)}
-          aria-label="Log source"
+          aria-label={t("logs.source")}
         >
-          <option value="">Off</option>
+          <option value="">{t("logs.off")}</option>
           {streamable.map((d) => (
             <option key={d.id} value={logId(d)}>
               {d.name}
@@ -135,8 +137,8 @@ export function LogView({ devices }: { devices: Device[] }) {
             type="search"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filter lines"
-            aria-label="Filter log lines"
+            placeholder={t("logs.filter")}
+            aria-label={t("logs.filterAria")}
           />
         </div>
 
@@ -147,19 +149,19 @@ export function LogView({ devices }: { devices: Device[] }) {
             checked={follow}
             onChange={(e) => setFollow(e.target.checked)}
           />
-          Follow
+          {t("logs.follow")}
         </label>
 
         <button className="btn" disabled={shown.length === 0} onClick={copy}>
-          Copy
+          {t("logs.copy")}
         </button>
         <button
           className="btn"
           disabled={shown.length === 0}
           onClick={exportLines}
-          title="Write these lines to your Downloads folder"
+          title={t("logs.exportTitle")}
         >
-          Export
+          {t("logs.export")}
         </button>
 
         <span className="panel__count">
@@ -173,7 +175,7 @@ export function LogView({ devices }: { devices: Device[] }) {
           <button
             className="btn btn--icon"
             onClick={() => setNotice(null)}
-            aria-label="Dismiss"
+            aria-label={t("banner.dismiss")}
           >
             <CloseIcon />
           </button>
@@ -184,11 +186,11 @@ export function LogView({ devices }: { devices: Device[] }) {
         {error && <p className="empty">{error}</p>}
         {!error && streamable.length === 0 && (
           <p className="empty">
-            Start a simulator or emulator to stream its log.
+            {t("logs.emptyNoDevice")}
           </p>
         )}
         {!error && streamable.length > 0 && !source && (
-          <p className="empty">Pick a device above to start streaming.</p>
+          <p className="empty">{t("logs.emptyPick")}</p>
         )}
         {shown.map((l, i) => (
           <div className="logline" key={i}>

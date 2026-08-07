@@ -171,9 +171,7 @@ fn parse_ollama_list(stdout: &str) -> Vec<(String, String)> {
             let cols: Vec<&str> = line.split_whitespace().collect();
             // NAME ID SIZE UNIT ...
             match cols.as_slice() {
-                [name, _id, size, unit, ..] => {
-                    Some((name.to_string(), format!("{size} {unit}")))
-                }
+                [name, _id, size, unit, ..] => Some((name.to_string(), format!("{size} {unit}"))),
                 _ => None,
             }
         })
@@ -271,9 +269,7 @@ pub fn list_runtimes() -> Vec<Runtime> {
     all.extend(ollama());
     all.extend(jvm_daemons());
     // Running first, then grouped by provider, then by name.
-    all.sort_by(|a, b| {
-        (!a.running, &a.kind, &a.name).cmp(&(!b.running, &b.kind, &b.name))
-    });
+    all.sort_by(|a, b| (!a.running, &a.kind, &a.name).cmp(&(!b.running, &b.kind, &b.name)));
     all
 }
 
@@ -324,7 +320,10 @@ mod tests {
             rows[0].meta, "postgres:16 · shop · :5432",
             "image, compose project, and the port listed once"
         );
-        assert_eq!(rows[1].meta, "redis:7", "no project, no ports, no stray dots");
+        assert_eq!(
+            rows[1].meta, "redis:7",
+            "no project, no ports, no stray dots"
+        );
         assert!(rows[0].running && rows[0].can_stop && !rows[0].can_start);
         assert!(!rows[1].running && rows[1].can_start && rows[1].can_remove);
     }

@@ -33,6 +33,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "Mustafa Savul",
+    "copyright": "Copyright © 2026 Mustafa Savul",
+    "category": "DeveloperTool",
+    "shortDescription": "Ports, processes and local dev runtimes in your menu bar.",
+    "longDescription": "portiye shows what is listening on your machine, which process owns it and where that process was started from, and lets you stop it without hunting for a PID. It also manages the emulators, simulators, containers and build daemons that opened half of those ports in the first place.",
+    "licenseFile": "../LICENSE",
+    "linux": {
+      "deb": {
+        "depends": [
+          "lsof"
+        ]
+      }
+    }
   }
 }

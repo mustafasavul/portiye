@@ -6,6 +6,7 @@ import { useTheme } from "./theme";
 import { warningFor } from "./risk";
 import { runtimeOf } from "./runtime";
 import { useConfirm } from "./Confirm";
+import { useI18n } from "./i18n";
 import { usePersisted } from "./hooks/usePersisted";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { Toolbar } from "./components/Toolbar";
@@ -17,6 +18,7 @@ import { ProcessDetail } from "./components/ProcessDetail";
 import { LogView } from "./components/LogView";
 import { CloseIcon } from "./icons";
 import { defaultDir, mb, THRESHOLDS, thresholdLabel } from "./types";
+import type { Key } from "./i18n";
 import type {
   Avd,
   Device,
@@ -32,6 +34,7 @@ import type {
 } from "./types";
 
 export default function App() {
+  const { t, locale } = useI18n();
   const [theme, setTheme] = useTheme();
   const [avds, setAvds] = useState<Avd[]>([]);
   const [sims, setSims] = useState<Simulator[]>([]);
@@ -92,6 +95,13 @@ export default function App() {
     }
   }, []);
 
+  // The tray menu is drawn in Rust and cannot read the webview's dictionary,
+  // so the chosen language is pushed to it. Rebuilding the menu is the whole
+  // point, and it costs a cached read.
+  useEffect(() => {
+    invoke("set_locale", { locale }).catch(() => {});
+  }, [locale]);
+
   const refresh = useCallback(async () => {
     await Promise.all([refreshPorts(), refreshDevices()]);
   }, [refreshPorts, refreshDevices]);
@@ -135,10 +145,9 @@ export default function App() {
       platform: "Android",
       meta: a.serial ?? "emulator",
       running: a.serial !== null,
-      toggleLabel: a.serial ? "Stop" : "Launch",
-      resetLabel: "Wipe",
-      resetWarning:
-        "All apps, data and snapshots are erased, then it cold boots.",
+      toggleLabel: t(a.serial ? "device.stop" : "device.launch"),
+      resetLabel: t("device.wipe"),
+      resetWarning: t("device.wipeWarning"),
       toggle: () =>
         a.serial
           ? invoke("stop_avd", { serial: a.serial })
@@ -155,9 +164,9 @@ export default function App() {
       // strip the prefix rather than printing it twice.
       meta: s.runtime.replace(/^iOS\s*/, ""),
       running: s.state === "Booted",
-      toggleLabel: s.state === "Booted" ? "Shutdown" : "Boot",
-      resetLabel: "Erase",
-      resetWarning: "All apps, data and caches are wiped.",
+      toggleLabel: t(s.state === "Booted" ? "device.shutdown" : "device.boot"),
+      resetLabel: t("device.erase"),
+      resetWarning: t("device.eraseWarning"),
       toggle: () =>
         invoke(s.state === "Booted" ? "shutdown_simulator" : "boot_simulator", {
           udid: s.udid,
@@ -170,7 +179,7 @@ export default function App() {
     return [...android, ...ios].sort(
       (x, y) => Number(y.running) - Number(x.running),
     );
-  }, [avds, sims]);
+  }, [avds, sims, t]);
 
   /** The same row shape, fed by whatever runtimes this machine actually has. */
   const runtimeDevices: Device[] = useMemo(
@@ -181,9 +190,9 @@ export default function App() {
         platform: r.kind,
         meta: r.meta,
         running: r.running,
-        toggleLabel: r.running ? "Stop" : "Start",
-        resetLabel: "Remove",
-        resetWarning: "The container and its writable layer are deleted.",
+        toggleLabel: t(r.running ? "device.stop" : "device.start"),
+        resetLabel: t("device.remove"),
+        resetWarning: t("device.removeWarning"),
         toggle: (r.running ? r.can_stop : r.can_start)
           ? () =>
               invoke("runtime_action", {
@@ -198,7 +207,7 @@ export default function App() {
           ? () => invoke("runtime_action", { id: r.id, action: "remove" })
           : null,
       })),
-    [runtimes],
+    [runtimes, t],
   );
 
   /**
@@ -353,7 +362,7 @@ export default function App() {
     id: string,
     title: string,
     procs: Proc[],
-    warning: string | null,
+    warning: Key | null,
   ) => {
     if (procs.length === 0) return;
     const ok = await ask({
@@ -364,11 +373,11 @@ export default function App() {
         primary: `${p.name} · pid ${p.pid} · :${p.ports.join(", :")} · ${mb(p.memory)}`,
         secondary: p.detail || undefined,
       })),
-      warning,
+      warning: warning && t(warning),
       // Whatever these spawned goes with them: killing a `dotnet watch` or
       // `npm run dev` on its own leaves the real server running and orphaned.
-      note: "Processes they started are killed too.",
-      confirmLabel: `Kill ${procs.length}`,
+      note: t("kill.note"),
+      confirmLabel: t("kill.confirm", { n: procs.length }),
     });
     if (!ok) return;
 
@@ -380,21 +389,27 @@ export default function App() {
 
       if (report.children.length > 0)
         setNotice({
-          text: `Killed ${report.killed.length} + ${report.children.length} child ${report.children.length === 1 ? "process" : "processes"}`,
+          text: t(
+            report.children.length === 1 ? "kill.childrenOne" : "kill.children",
+            { n: report.killed.length, c: report.children.length },
+          ),
         });
 
       if (report.denied.length > 0) {
         const elevate = await ask({
-          title: `${report.denied.length} of ${procs.length} refused to close`,
+          title: t("kill.deniedTitle", {
+            n: report.denied.length,
+            total: procs.length,
+          }),
           lines: report.denied.map((pid) => {
             const proc = procs.find((p) => p.pid === pid);
             return {
-              primary: `${proc?.name ?? "process"} · pid ${pid}`,
+              primary: `${proc?.name ?? t("kill.deniedProcess")} · pid ${pid}`,
               secondary: proc?.detail || undefined,
             };
           }),
-          warning: `They belong to another user. ${report.elevation}`,
-          confirmLabel: "Retry as administrator",
+          warning: t("kill.deniedWarning", { hint: report.elevation }),
+          confirmLabel: t("kill.retryElevated"),
         });
         if (elevate)
           await invoke("kill_processes_elevated", { pids: report.denied });
@@ -412,7 +427,9 @@ export default function App() {
     const procs = shownProcs.filter((p) => selected.has(p.pid));
     killMany(
       "selection",
-      `Kill ${procs.length} selected ${procs.length === 1 ? "process" : "processes"}?`,
+      procs.length === 1
+        ? t("kill.titleSelectedOne")
+        : t("kill.titleSelected", { n: procs.length }),
       procs,
       procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
     );
@@ -436,7 +453,7 @@ export default function App() {
         format,
         stamp,
       });
-      setNotice({ text: `Exported ${rows.length} rows`, path });
+      setNotice({ text: t("export.notice", { n: rows.length }), path });
     } catch (e) {
       setError(String(e));
     }
@@ -499,7 +516,7 @@ export default function App() {
           <button
             className="btn btn--icon"
             onClick={() => setError(null)}
-            aria-label="Dismiss error"
+            aria-label={t("banner.dismissError")}
           >
             <CloseIcon />
           </button>
@@ -517,13 +534,13 @@ export default function App() {
               className="btn"
               onClick={() => revealItemInDir(notice.path!)}
             >
-              Reveal
+              {t("banner.reveal")}
             </button>
           )}
           <button
             className="btn btn--icon"
             onClick={() => setNotice(null)}
-            aria-label="Dismiss"
+            aria-label={t("banner.dismiss")}
           >
             <CloseIcon />
           </button>
@@ -537,19 +554,19 @@ export default function App() {
       {view === "ports" && (
       <>
       <DevicePanel
-        title="Devices"
+        title={t("devices.title")}
         devices={devices}
         busy={busy}
         run={run}
         ask={ask}
-        empty="No emulators or simulators found. Create one in Android Studio, or install Xcode for iOS devices."
+        empty={t("devices.empty")}
       />
 
       {/* Hidden entirely when the machine has no Docker, Ollama or JVM
           daemons — an empty panel would only be noise. */}
       {runtimeDevices.length > 0 && (
         <DevicePanel
-          title="Runtimes"
+          title={t("devices.runtimes")}
           devices={runtimeDevices}
           busy={busy}
           run={run}
@@ -564,7 +581,7 @@ export default function App() {
                 Devices and Runtimes, the state is uniform, so the dot belongs
                 on the heading rather than on each row. */}
             <span className="dot dot--live" aria-hidden="true" />
-            Listening ports
+            {t("ports.title")}
           </h2>
 
           {selected.size > 0 && (
@@ -573,9 +590,9 @@ export default function App() {
               disabled={busy === "selection"}
               aria-busy={busy === "selection"}
               onClick={killSelected}
-              title="Kill the selected processes (⌘⌫)"
+              title={t("ports.killSelectedTitle")}
             >
-              Kill {selected.size} selected
+              {t("ports.killSelected", { n: selected.size })}
             </button>
           )}
 
@@ -588,8 +605,8 @@ export default function App() {
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && saveFilter()}
-              placeholder="Filter ports"
-              aria-label="Filter ports by number, process or path"
+              placeholder={t("ports.filter")}
+              aria-label={t("ports.filterAria")}
               list="portiye-saved-filters"
             />
             <datalist id="portiye-saved-filters">
@@ -603,12 +620,12 @@ export default function App() {
           {/* The threshold paints rows in this table and nothing else, so it
               belongs to the table rather than to the window chrome. */}
           <label className="toolbar__setting">
-            Flag over
+            {t("ports.flagOver")}
             <select
               className="select"
               value={memoryWarnMb}
               onChange={(e) => setMemoryWarnMb(Number(e.target.value))}
-              aria-label="Flag processes using more memory than"
+              aria-label={t("ports.flagAria")}
             >
               {THRESHOLDS.map((n) => (
                 <option key={n} value={n}>
@@ -627,15 +644,15 @@ export default function App() {
           {families.length === 0 ? (
             <p className="empty">
               {ports.length === 0 ? (
-                "Nothing is listening on this machine."
+                t("ports.emptyNone")
               ) : (
                 <>
-                  No port matches “{filter}”.
+                  {t("ports.emptyFilter", { q: filter })}
                   <button
                     className="btn empty__action"
                     onClick={() => setFilter("")}
                   >
-                    Clear filter
+                    {t("ports.clearFilter")}
                   </button>
                 </>
               )}
@@ -648,7 +665,7 @@ export default function App() {
                 onKill={(g) =>
                   killMany(
                     `fast:${g.kind}:${g.name}`,
-                    `Kill ${g.procs.length} ${g.name} processes?`,
+                    t("kill.titleGroup", { n: g.procs.length, name: g.name }),
                     g.procs,
                     g.warning,
                   )
@@ -668,7 +685,7 @@ export default function App() {
                 onKill={(proc) =>
                   killMany(
                     `port:${proc.pid}`,
-                    `Kill ${proc.name}?`,
+                    t("kill.titleOne", { name: proc.name }),
                     [proc],
                     warningFor(proc.name),
                   )
@@ -688,7 +705,7 @@ export default function App() {
             if (proc)
               killMany(
                 `port:${proc.pid}`,
-                `Kill ${proc.name}?`,
+                t("kill.titleOne", { name: proc.name }),
                 [proc],
                 warningFor(proc.name),
               ).then(() => setDetailPid(null));

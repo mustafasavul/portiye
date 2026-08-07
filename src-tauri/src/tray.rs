@@ -2,48 +2,44 @@
 //!
 //! Native menu instead of a second webview: no extra window to position, and
 //! it looks right on all three platforms for free.
+//!
+//! The menu is deliberately four items tall. A flat item per listening PID
+//! meant a menu bar that unrolled past the bottom of the screen on any machine
+//! with a few dev servers up — so ports live in a submenu, grouped into the
+//! same process families the window shows, and devices in another.
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use std::collections::BTreeMap;
+
+use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, Runtime};
 
+use crate::i18n::t;
+use crate::ports::PortEntry;
+
 pub const TRAY_ID: &str = "portiye-tray";
 
-/// Menu ids are `kill:<pid>` so the click handler needs no shared state.
+/// Families listed before the menu is truncated. Past this the menu is taller
+/// than the screen again, which is the thing this file exists to avoid.
+const MAX_FAMILIES: usize = 30;
+
+/// Menu ids are `kill:<pid>` — or `kill:<pid>,<pid>` for a whole family — so
+/// the click handler needs no shared state.
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::new(app)?;
 
     // Reads the watcher's last scan — the tray must never run its own.
-    let ports = app.state::<crate::watch::Watch>();
-    match crate::watch::get_listening_ports(ports) {
-        ports if !ports.is_empty() => {
-            for p in ports {
-                menu.append(&MenuItem::with_id(
-                    app,
-                    format!("kill:{}", p.pid),
-                    format!(
-                        ":{}  {}  —  {} MB  (pid {})",
-                        p.port,
-                        if p.detail.is_empty() {
-                            p.name.clone()
-                        } else {
-                            format!("{} · {}", p.name, p.detail)
-                        },
-                        p.memory / 1_048_576,
-                        p.pid
-                    ),
-                    true,
-                    None::<&str>,
-                )?)?;
-            }
-        }
-        _ => menu.append(&MenuItem::with_id(
+    let ports = crate::watch::get_listening_ports(app.state::<crate::watch::Watch>());
+    if ports.is_empty() {
+        menu.append(&MenuItem::with_id(
             app,
             "none",
-            "No listening ports",
+            t("tray.none"),
             false,
             None::<&str>,
-        )?)?,
+        )?)?;
+    } else {
+        menu.append(&ports_submenu(app, &ports)?)?;
     }
 
     // Devices: the other half of the app, reachable without opening the window.
@@ -51,37 +47,163 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Simulator.app to come forward anyway, which the boot command handles.
     let devices = device_items();
     if !devices.is_empty() {
-        menu.append(&PredefinedMenuItem::separator(app)?)?;
-        for (id, label) in devices {
-            menu.append(&MenuItem::with_id(app, id, label, true, None::<&str>)?)?;
-        }
+        let items = devices
+            .into_iter()
+            .map(|(id, label)| MenuItem::with_id(app, id, label, true, None::<&str>))
+            .collect::<tauri::Result<Vec<_>>>()?;
+        menu.append(&submenu(
+            app,
+            format!("{} ({})", t("tray.devices"), items.len()),
+            &items,
+        )?)?;
     }
 
     menu.append(&PredefinedMenuItem::separator(app)?)?;
-    menu.append(&MenuItem::with_id(app, "show", "Open portiye…", true, None::<&str>)?)?;
-    menu.append(&MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "show",
+        t("tray.show"),
+        true,
+        None::<&str>,
+    )?)?;
+    menu.append(&MenuItem::with_id(
+        app,
+        "quit",
+        t("tray.quit"),
+        true,
+        None::<&str>,
+    )?)?;
     Ok(menu)
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+/// `Submenu::with_items` wants trait objects; every caller here has a plain
+/// `Vec<MenuItem>` or `Vec<Box<dyn IsMenuItem>>`, so the borrow dance happens
+/// once, here.
+fn submenu<R: Runtime, I: IsMenuItem<R>>(
+    app: &AppHandle<R>,
+    title: String,
+    items: &[I],
+) -> tauri::Result<Submenu<R>> {
+    let refs: Vec<&dyn IsMenuItem<R>> = items.iter().map(|i| i as &dyn IsMenuItem<R>).collect();
+    Submenu::with_items(app, title, true, &refs)
+}
 
-    /// The tray builds its menu on the main thread during startup, so anything
-    /// that panics here takes the whole app down before a window appears. This
-    /// runs the real code path; on a machine without the SDKs it simply
-    /// returns an empty list, which is also the contract.
-    #[test]
-    fn device_items_never_panics_and_encodes_its_action() {
-        for (id, label) in device_items() {
-            let (kind, rest) = id.split_once(':').expect("id carries a kind");
-            assert!(matches!(kind, "avd" | "sim"), "unexpected kind {kind}");
-            let (action, target) = rest.split_once(':').expect("id carries an action");
-            assert!(matches!(action, "start" | "stop"), "unexpected action {action}");
-            assert!(!target.is_empty(), "every entry names a target");
-            assert!(!label.is_empty(), "every entry has a label");
+/// One process: every port it holds, what it is, and how much it costs.
+fn process_label(pid: u32, ports: &[u16], entry: &PortEntry) -> String {
+    let list = ports
+        .iter()
+        .map(|p| format!(":{p}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let who = if entry.detail.is_empty() {
+        entry.name.clone()
+    } else {
+        format!("{} · {}", entry.name, entry.detail)
+    };
+    format!(
+        "{list}  {who}  —  {} MB  (pid {pid})",
+        entry.memory / 1_048_576
+    )
+}
+
+/// Ports, grouped the way the window groups them: one entry per process, and
+/// a nested submenu whenever a process family holds more than one of them.
+fn ports_submenu<R: Runtime>(app: &AppHandle<R>, ports: &[PortEntry]) -> tauri::Result<Submenu<R>> {
+    // family -> pid -> its ports. `BTreeMap` so the menu order is stable
+    // between rebuilds instead of following hash iteration.
+    let mut families: BTreeMap<u32, BTreeMap<u32, (Vec<u16>, &PortEntry)>> = BTreeMap::new();
+    for entry in ports {
+        families
+            .entry(entry.family)
+            .or_default()
+            .entry(entry.pid)
+            .or_insert_with(|| (Vec::new(), entry))
+            .0
+            .push(entry.port);
+    }
+    for procs in families.values_mut() {
+        for (list, _) in procs.values_mut() {
+            list.sort_unstable();
         }
     }
+
+    // Lowest port first — the same reading order as the table, and far more
+    // memorable than a PID.
+    let mut ordered: Vec<_> = families.into_iter().collect();
+    ordered.sort_by_key(|(_, procs)| {
+        procs
+            .values()
+            .flat_map(|(list, _)| list.iter().copied())
+            .min()
+            .unwrap_or(u16::MAX)
+    });
+    let hidden = ordered.len().saturating_sub(MAX_FAMILIES);
+    ordered.truncate(MAX_FAMILIES);
+
+    let mut items: Vec<Box<dyn IsMenuItem<R>>> = Vec::new();
+    for (_, procs) in ordered {
+        // A lone process is a lone item: a submenu holding one entry is a
+        // click for nothing.
+        if procs.len() == 1 {
+            let (pid, (list, entry)) = procs.into_iter().next().expect("len == 1");
+            items.push(Box::new(MenuItem::with_id(
+                app,
+                format!("kill:{pid}"),
+                process_label(pid, &list, entry),
+                true,
+                None::<&str>,
+            )?));
+            continue;
+        }
+
+        let mut children: Vec<MenuItem<R>> = Vec::new();
+        for (pid, (list, entry)) in &procs {
+            children.push(MenuItem::with_id(
+                app,
+                format!("kill:{pid}"),
+                process_label(*pid, list, entry),
+                true,
+                None::<&str>,
+            )?);
+        }
+        let pids = procs
+            .keys()
+            .map(|p| p.to_string())
+            .collect::<Vec<_>>()
+            .join(",");
+        children.push(MenuItem::with_id(
+            app,
+            format!("kill:{pids}"),
+            format!("{} ({})", t("tray.killAll"), procs.len()),
+            true,
+            None::<&str>,
+        )?);
+
+        // The root names the family — `emulator` rather than the `qemu` it
+        // spawned — and the count says what is folded inside.
+        let root = procs.values().next().expect("non-empty");
+        let title = format!(
+            "{}  ({} × {})",
+            root.1.name,
+            procs.len(),
+            procs.values().map(|(l, _)| l.len()).sum::<usize>()
+        );
+        items.push(Box::new(submenu(app, title, &children)?));
+    }
+
+    if hidden > 0 {
+        items.push(Box::new(MenuItem::with_id(
+            app,
+            "more",
+            format!("+{hidden}…"),
+            false,
+            None::<&str>,
+        )?));
+    }
+
+    let total = ports.len();
+    let refs: Vec<&dyn IsMenuItem<R>> = items.iter().map(|i| i.as_ref()).collect();
+    Submenu::with_items(app, format!("{} ({total})", t("tray.ports")), true, &refs)
 }
 
 /// `(menu id, label)` for every emulator and simulator.
@@ -94,8 +216,14 @@ fn device_items() -> Vec<(String, String)> {
     for avd in crate::avd::list_avds().unwrap_or_default() {
         let pretty = avd.name.replace('_', " ");
         items.push(match &avd.serial {
-            Some(serial) => (format!("avd:stop:{serial}"), format!("● Stop {pretty}")),
-            None => (format!("avd:start:{}", avd.name), format!("○ Launch {pretty}")),
+            Some(serial) => (
+                format!("avd:stop:{serial}"),
+                format!("● {} {pretty}", t("tray.stop")),
+            ),
+            None => (
+                format!("avd:start:{}", avd.name),
+                format!("○ {} {pretty}", t("tray.launch")),
+            ),
         });
     }
 
@@ -103,16 +231,25 @@ fn device_items() -> Vec<(String, String)> {
         items.push(if sim.state == "Booted" {
             (
                 format!("sim:stop:{}", sim.udid),
-                format!("● Shutdown {}", sim.name),
+                format!("● {} {}", t("tray.shutdown"), sim.name),
             )
         } else {
             (
                 format!("sim:start:{}", sim.udid),
-                format!("○ Boot {}", sim.name),
+                format!("○ {} {}", t("tray.boot"), sim.name),
             )
         });
     }
     items
+}
+
+/// The PIDs a `kill:` menu id targets — one, or a whole family.
+fn pids_of(id: &str) -> Vec<u32> {
+    id.strip_prefix("kill:")
+        .unwrap_or_default()
+        .split(',')
+        .filter_map(|p| p.parse().ok())
+        .collect()
 }
 
 fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
@@ -134,7 +271,7 @@ fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
                 let (kind, rest) = id.split_once(':').unwrap_or((&id, ""));
                 match kind {
                     "kill" => {
-                        if let Ok(pid) = rest.parse() {
+                        for pid in pids_of(&id) {
                             let _ = crate::ports::kill_process(pid);
                         }
                     }
@@ -187,4 +324,37 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     // No polling loop here: the watcher owns the only one and calls `refresh`
     // after every scan. Two loops meant two scans of the same machine.
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The tray builds its menu on the main thread during startup, so anything
+    /// that panics here takes the whole app down before a window appears. This
+    /// runs the real code path; on a machine without the SDKs it simply
+    /// returns an empty list, which is also the contract.
+    #[test]
+    fn device_items_never_panics_and_encodes_its_action() {
+        for (id, label) in device_items() {
+            let (kind, rest) = id.split_once(':').expect("id carries a kind");
+            assert!(matches!(kind, "avd" | "sim"), "unexpected kind {kind}");
+            let (action, target) = rest.split_once(':').expect("id carries an action");
+            assert!(
+                matches!(action, "start" | "stop"),
+                "unexpected action {action}"
+            );
+            assert!(!target.is_empty(), "every entry names a target");
+            assert!(!label.is_empty(), "every entry has a label");
+        }
+    }
+
+    #[test]
+    fn a_family_kill_id_lists_every_pid_in_it() {
+        assert_eq!(pids_of("kill:12"), vec![12]);
+        assert_eq!(pids_of("kill:12,7,900"), vec![12, 7, 900]);
+        // Garbage in an id must drop out rather than kill pid 0 or panic.
+        assert!(pids_of("kill:").is_empty());
+        assert_eq!(pids_of("kill:12,junk"), vec![12]);
+    }
 }
