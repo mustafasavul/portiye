@@ -4,6 +4,28 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1]
+
+### Fixed
+
+- `cargo clippy -D warnings` failed on Linux and Windows while passing on
+  macOS: `kill_processes_elevated` built one list of PIDs that only the macOS
+  branch used, and `cmd()` returned early out of a `#[cfg(windows)]` block.
+  Each `#[cfg]` branch now builds its own arguments. No behaviour change — the
+  same processes are killed the same way.
+- The two process-killing tests build their fixture from `sleep` and `sh -c`,
+  which Windows does not have, so they are `#[cfg(unix)]`. Windows runs the
+  other 23. What is gated is the fixture, not the coverage.
+
+### Changed
+
+- README rewritten around the questions people actually arrive with — what is
+  on port 3000, how to fix `EADDRINUSE`, how to kill a dev server and its
+  children — with a comparison against `lsof`, `netstat` and Activity Monitor,
+  and an FAQ. Package and bundle descriptions and keywords updated to match.
+- `CONTRIBUTING.md` and `CLAUDE.md` document how to check the Windows target
+  from macOS: Homebrew's `llvm` ships the `llvm-rc` that `tauri-winres` needs.
+
 ## [0.2.0]
 
 ### Added

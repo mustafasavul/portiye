@@ -1,6 +1,6 @@
 [package]
 name = "portiye"
-version = "0.2.0"
+version = "0.2.1"
 description = "Find what's using a port and stop it: listening ports, the processes behind them, and local dev runtimes, from the menu bar"
 authors = ["Mustafa Savul"]
 license = "MIT"
