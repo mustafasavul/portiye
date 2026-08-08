@@ -12,7 +12,7 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 25 tests
+cd src-tauri && cargo test # 25 tests (23 on Windows — two need a unix fixture)
 npm run check              # locale keys, placeholders, version triple
 ```
 
@@ -130,6 +130,11 @@ top-left. Centre it explicitly.
 
 **React props in event handlers go stale under key-repeat.** Pass updater
 functions (`prev => prev + step`), not computed values.
+
+**Two kill tests are `#[cfg(unix)]`**, not because `kill_processes` differs by
+platform — it walks the same `children_map` everywhere — but because their
+fixtures are `sleep` and `sh -c`, which Windows does not have. Gate the
+fixture, never the behaviour.
 
 **`#[cfg]` blocks are where `-D warnings` bites.** A value computed once and
 used by only one platform's branch is an unused variable on the other two, and

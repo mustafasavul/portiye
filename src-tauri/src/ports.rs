@@ -520,6 +520,9 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
         assert_eq!(family_root(1, &parents, &HashSet::from([1, 2])), 2);
     }
 
+    /// Unix only: it spawns `sleep`, and leans on PID 1 being alive and
+    /// unkillable by a normal user. Windows has neither.
+    #[cfg(unix)]
     #[test]
     fn kill_processes_reports_each_outcome() {
         // Our own child, so the test never touches anything it does not own.
@@ -552,6 +555,11 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
 
     /// The `dotnet watch` shape: killing the listener alone left the real server
     /// running, orphaned onto init, still holding the port.
+    ///
+    /// Unix only: the fixture is a `sh -c` that backgrounds a `sleep`. The
+    /// behaviour it guards is not platform-specific — `kill_processes` walks
+    /// the same `children_map` everywhere — but the fixture is.
+    #[cfg(unix)]
     #[test]
     fn kill_takes_the_whole_tree_down() {
         // `sh` stays alive on the second sleep while the first runs as its child.
