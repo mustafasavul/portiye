@@ -131,6 +131,12 @@ top-left. Centre it explicitly.
 **React props in event handlers go stale under key-repeat.** Pass updater
 functions (`prev => prev + step`), not computed values.
 
+**`#[cfg]` blocks are where `-D warnings` bites.** A value computed once and
+used by only one platform's branch is an unused variable on the other two, and
+CI fails on a machine that compiles clean here. Build each branch's arguments
+inside that branch. Check the Windows target locally before pushing — see
+"Known gaps" for the one-liner.
+
 **Collect before you decide.** Family grouping originally picked the root while
 iterating, so any member arriving before the root was silently dropped. Gather
 members, then choose.
@@ -166,9 +172,17 @@ The established pattern, and it catches real bugs:
   seen firing in anger.
 - GitHub Actions runs `npm run build`, `cargo fmt --check`, `cargo clippy -D
   warnings` and `cargo test` on macOS, Linux and Windows. Nothing runs the UI.
-- Windows and Linux have never been compiled *locally* — `llvm-rc` is missing
-  here, so cross-target checks fail for environment reasons, not code reasons.
-  CI now compiles them; the platform behaviour is still unobserved by eye.
+- **Windows can be checked locally after all.** The `llvm-rc` that
+  `tauri-winres` panics without ships with Homebrew's `llvm`:
+
+  ```bash
+  PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+  ```
+
+  Worth running before pushing anything with a `#[cfg]` in it — that is what
+  caught the two lints that turned CI red. Linux still needs GTK dev headers
+  (`gdk-sys` and friends fail in their build scripts), so CI is the only Linux
+  check. Neither platform has been observed by eye.
 - The tray's new submenu grouping was verified by unit test and by launching
   the real app without a panic — the menu itself has not been read by eye.
 - The 28 translations were written in one pass and have had no native review

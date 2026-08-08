@@ -92,16 +92,15 @@ fn detail_for(argv: &str, cwd: Option<&str>, home: Option<&str>) -> String {
 
 /// Build a `Command` that never flashes a console window on Windows.
 pub fn cmd(program: impl AsRef<std::ffi::OsStr>) -> Command {
-    let c = Command::new(program);
+    // `mut` is only read on Windows; every other target just hands it back.
+    #[allow(unused_mut)]
+    let mut c = Command::new(program);
     #[cfg(target_os = "windows")]
     {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        let mut c = c;
         c.creation_flags(CREATE_NO_WINDOW);
-        return c;
     }
-    #[cfg(not(target_os = "windows"))]
     c
 }
 
@@ -378,19 +377,23 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
         }
     }
 
-    let list = pids
-        .iter()
-        .map(u32::to_string)
-        .collect::<Vec<_>>()
-        .join(" ");
-
+    // Each branch builds its own argument list: a shared one is dead code on
+    // the two platforms that do not use it, which `-D warnings` treats as a
+    // build failure.
     #[cfg(target_os = "macos")]
-    let out = cmd("osascript")
-        .args([
-            "-e",
-            &format!("do shell script \"/bin/kill -9 {list}\" with administrator privileges"),
-        ])
-        .output();
+    let out = {
+        let list = pids
+            .iter()
+            .map(u32::to_string)
+            .collect::<Vec<_>>()
+            .join(" ");
+        cmd("osascript")
+            .args([
+                "-e",
+                &format!("do shell script \"/bin/kill -9 {list}\" with administrator privileges"),
+            ])
+            .output()
+    };
 
     #[cfg(target_os = "linux")]
     let out = {
