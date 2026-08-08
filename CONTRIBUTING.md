@@ -15,9 +15,22 @@ npm run tauri dev
 
 ```bash
 npm run build              # tsc + vite
+npm run check              # locale keys, placeholders, version
 cd src-tauri && cargo test
-cd src-tauri && cargo fmt && cargo clippy
+cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings
 ```
+
+Touching anything inside a `#[cfg(target_os = ...)]` block? Check the Windows
+target too — CI compiles all three, and a variable that only one platform's
+branch uses is an unused variable on the others, which `-D warnings` turns
+into a red build. Homebrew's `llvm` ships the `llvm-rc` this needs:
+
+```bash
+PATH="/opt/homebrew/opt/llvm/bin:$PATH" cargo clippy --target x86_64-pc-windows-msvc --all-targets -- -D warnings
+```
+
+Linux cannot be checked from macOS — the GTK `-sys` build scripts want dev
+headers — so CI is the only Linux check.
 
 ## Before you open a pull request
 
