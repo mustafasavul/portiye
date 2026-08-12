@@ -51,3 +51,42 @@ export const CloseIcon = () => (
     <path d="m4 4 8 8M12 4l-8 8" />
   </svg>
 );
+
+/* ——— System gauges ————————————————————————————————————
+ * Four silhouettes that stay apart at 14px: a square with legs, a square with
+ * a core, stacked bars, stacked platters.
+ */
+
+/** A packaged die with pins on all four sides. */
+export const CpuIcon = () => (
+  <svg {...base}>
+    <rect x="4.5" y="4.5" width="7" height="7" rx="1" />
+    <path d="M6.5 1.5V4M9.5 1.5V4M6.5 12v2.5M9.5 12v2.5M1.5 6.5H4M1.5 9.5H4M12 6.5h2.5M12 9.5h2.5" />
+  </svg>
+);
+
+/** The same package, cored out — the die reads as the render target. */
+export const GpuIcon = () => (
+  <svg {...base}>
+    <rect x="2.5" y="4" width="11" height="8" rx="1.5" />
+    <rect x="5.5" y="6.75" width="5" height="2.5" rx="0.5" />
+    <path d="M5 12v2.5M11 12v2.5" />
+  </svg>
+);
+
+/** A DIMM: the module, its chips, and the notched contact edge. */
+export const MemoryIcon = () => (
+  <svg {...base}>
+    <rect x="1.5" y="4.5" width="13" height="6" rx="1" />
+    <path d="M4.5 6.5v2M8 6.5v2M11.5 6.5v2M4 10.5v2M12 10.5v2" />
+  </svg>
+);
+
+/** Stacked platters — the one shape that never reads as a CPU. */
+export const DiskIcon = () => (
+  <svg {...base}>
+    <ellipse cx="8" cy="4" rx="5.5" ry="2.5" />
+    <path d="M2.5 4v8c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5V4" />
+    <path d="M2.5 8c0 1.4 2.5 2.5 5.5 2.5s5.5-1.1 5.5-2.5" />
+  </svg>
+);

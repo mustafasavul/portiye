@@ -12,7 +12,7 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 25 tests (23 on Windows — two need a unix fixture)
+cd src-tauri && cargo test # 31 tests (29 on Windows — two need a unix fixture)
 npm run check              # locale keys, placeholders, version triple
 ```
 
@@ -27,14 +27,15 @@ Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
 
 | File | Owns |
 |---|---|
-| `watch.rs` | **The single poller.** Scans every 5s, diffs snapshots, keeps history, fires notifications, emits `ports-changed`. Everything else reads its cache. |
+| `watch.rs` | **The single poller.** Scans every 5s, diffs snapshots, keeps history, fires notifications, emits `ports-changed`. Everything else reads its cache. Also serves host CPU / RAM / disk off the same `System`. |
 | `ports.rs` | `scan()` (lsof / netstat + sysinfo), the `detail_for` labels, family grouping, kill + elevation |
+| `gpu.rs` | Whole-machine GPU load, one source per platform. `None` where there is none |
 | `runtimes.rs` | Docker / Ollama / JVM daemons — same row shape as devices |
 | `avd.rs`, `sim.rs` | Android emulators, iOS simulators |
 | `procinfo.rs` | One process in depth (CPU, tree, lsof). On demand only |
 | `logs.rs` | Device log streaming, one stream at a time |
 | `export.rs` | JSON/CSV snapshot to `~/Downloads` |
-| `tray.rs` | Menu-bar menu: ports + devices, actionable without the window |
+| `tray.rs` | Menu-bar menu: a one-line load readout, ports + devices, actionable without the window |
 | `i18n.rs` | The tray's thirteen strings in 28 languages. `set_locale` is pushed by the window |
 
 ### Frontend — `src/`
@@ -45,7 +46,8 @@ names to language runtimes. `Confirm.tsx` is the confirmation dialog — **use i
 never `window.confirm`**. `i18n.tsx` is the provider; the strings live one
 file per language in `locales/`, listed only in `locales/index.ts`.
 
-Three views (tabs): Ports · History · Device Logs.
+Three views (tabs): Ports · History · Device Logs — the last only on a machine
+that has a simulator or emulator to stream.
 
 ---
 
@@ -111,9 +113,56 @@ same shape: name, platform, meta, running, start/stop, destructive action.
 **History is in memory** (500-event ring). Session-scoped is enough; the app
 runs for days. Upgrade path noted in `watch.rs`.
 
+**System load is host-wide, not per device.** The gauges between Devices and
+Listening Ports read the whole machine. There is no honest per-device number to
+show: iOS simulators are not isolated processes at all, and an Android emulator
+is a QEMU process whose host-side CPU is not the guest's. Only runtimes (JVM
+daemons, Docker containers) map to something real — that is the row to extend
+if per-item stats are ever wanted, not the emulator rows. `get_system_stats`
+reads the poller's own `System`, because a fresh `System::new_all()` always
+reports 0% CPU. Disks are enumerated per call instead: a `statfs` per mount is
+cheap, unlike the `simctl`/`docker` subprocesses that forced the device split.
+
+**A lister returns an empty list, never `Err`, when its toolchain is absent.**
+No Xcode, no Android SDK, no Docker — that is not a fault, it is a machine.
+`Err` is for a tool that is *there* and failed. This is a contract, not a
+style: the window fetches all three lists together, so one lister that rejects
+used to blank the other two panels and raise a banner every 30 seconds. Actions
+may still fail loudly — `boot_simulator` on a box without `xcrun` is a real
+error, because you had to see a device to click it.
+
+**Anything a platform cannot show is removed, not zeroed.** GPU with no
+readable counter, disk with no fixed volume, the `lsof` sections on Windows,
+the Device Logs tab on a machine with neither Xcode nor the Android SDK, the
+elevated-retry button on a Linux box without polkit. A zero, an empty picker
+or a button that can only fail all read as "broken app" rather than "not
+applicable here". `elevation_hint()` returning `""` is how the window learns
+it must not offer the retry.
+
+**A missing gauge beats a made-up one.** GPU is `Option<f32>` and the row is
+hidden when it is `None`. macOS reads `ioreg -c IOAccelerator` (~15ms, no
+sudo); Linux reads `gpu_busy_percent` out of sysfs and falls back to
+`nvidia-smi`; Windows has only `nvidia-smi`, because the generic "GPU Engine"
+counters need aggregating across every engine and process before they mean
+anything. Same rule for disk: no fixed volume, no row.
+
 ---
 
 ## Traps — each of these cost real debugging time
+
+**`Promise.all` over three unrelated toolchains is a blackout waiting to
+happen.** `list_avds` / `list_simulators` / `list_runtimes` enumerate Android,
+Xcode and Docker; most machines have some of them. Under `all`, one rejection
+threw away the two results that *did* arrive. It is `allSettled`, and each
+list is set independently. Same shape anywhere else that fans out over
+optional tools.
+
+**`sysinfo::used_memory()` is `total - free`, and it barely moves.** macOS keeps
+almost nothing free — it lends the rest out as cache — so `free` sits near
+0.1 GB and the "used" figure is pinned near the total: 13.5 of 16 GB on an idle
+machine, a permanent 85% that never twitches. The gauge looked frozen because
+it was. Use `total - available_memory()`, which counts reclaimable cache as
+free: it answers "how much room is left" and it actually moves.
 
 **`window.confirm` and `window.prompt` do nothing in the Tauri webview.** They
 return without showing a panel, so every guarded action silently no-ops. This
@@ -186,10 +235,21 @@ The established pattern, and it catches real bugs:
 
   Worth running before pushing anything with a `#[cfg]` in it — that is what
   caught the two lints that turned CI red. Linux still needs GTK dev headers
-  (`gdk-sys` and friends fail in their build scripts), so CI is the only Linux
-  check. Neither platform has been observed by eye.
-- The tray's new submenu grouping was verified by unit test and by launching
-  the real app without a panic — the menu itself has not been read by eye.
+  (`gdk-sys` and friends fail in their build scripts), so CI is the only full
+  Linux check. Neither platform has been observed by eye.
+
+  A `#[cfg(target_os = "linux")]` block that only touches `std` can still be
+  syntax- and lint-checked here without GTK, by pasting it into a standalone
+  file and compiling that for the target:
+
+  ```bash
+  rustc --target x86_64-unknown-linux-gnu --edition 2021 --emit=metadata \
+        -o /tmp/probe.rmeta -D warnings /tmp/linuxprobe.rs
+  ```
+
+- The tray's submenu grouping and its load readout were verified by unit test
+  and by launching the real app without a panic — the menu itself has not been
+  read by eye.
 - The 28 translations were written in one pass and have had no native review
   beyond Turkish and English. Corrections are the easiest contribution to make.
 - RTL was verified in the Vite harness (Arabic, mirrored layout, no horizontal

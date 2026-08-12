@@ -29,8 +29,16 @@ export const en = {
   "devices.title": "Devices",
   "devices.runtimes": "Runtimes",
   "devices.count": "{running} / {total} running",
+
   "devices.empty":
     "No emulators or simulators found. Create one in Android Studio, or install Xcode for iOS devices.",
+
+  "system.title": "System",
+  "system.cpu": "CPU",
+  "system.gpu": "GPU",
+  "system.memory": "Memory",
+  "system.disk": "Disk",
+  "system.load": "current load",
 
   "device.launch": "Launch",
   "device.stop": "Stop",

@@ -1,5 +1,6 @@
 mod avd;
 mod export;
+mod gpu;
 mod i18n;
 mod logs;
 mod ports;
@@ -25,6 +26,7 @@ pub fn run() {
             watch::get_listening_ports,
             watch::get_port_history,
             watch::clear_port_history,
+            watch::get_system_stats,
             procinfo::process_detail,
             logs::start_logs,
             logs::stop_logs,

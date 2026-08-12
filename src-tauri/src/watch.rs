@@ -41,6 +41,10 @@ struct Inner {
     history: VecDeque<PortEvent>,
     /// port -> (when it closed, who held it) — the raw material for takeovers.
     recently_closed: HashMap<u16, (u64, String)>,
+    /// Measured once per tick. Both the window and the tray read this copy —
+    /// probing the GPU twice per poll would be the two-pollers mistake again,
+    /// in miniature.
+    stats: SystemStats,
 }
 
 pub struct Watch {
@@ -125,10 +129,12 @@ fn diff(
 fn tick<R: Runtime>(app: &AppHandle<R>) {
     let watch = app.state::<Watch>();
 
-    let scanned = {
+    let (scanned, stats) = {
         let mut sys = watch.system.lock().unwrap();
         match crate::ports::scan(&mut sys) {
-            Ok(v) => v,
+            // Measured under the same lock and the same refresh as the scan,
+            // so the numbers the window shows describe the ports beside them.
+            Ok(v) => (v, measure(&sys)),
             // A transient lsof failure should not kill the loop.
             Err(_) => return,
         }
@@ -138,6 +144,7 @@ fn tick<R: Runtime>(app: &AppHandle<R>) {
 
     {
         let mut inner = watch.inner.lock().unwrap();
+        inner.stats = stats;
         // Move the previous scan out so `diff` can borrow the close-times map
         // mutably at the same time.
         let prev = std::mem::take(&mut inner.ports);
@@ -196,6 +203,83 @@ pub fn clear_port_history(watch: tauri::State<Watch>) {
     watch.inner.lock().unwrap().history.clear();
 }
 
+#[derive(Serialize, Clone, Debug, Default)]
+pub struct SystemStats {
+    /// Whole-machine CPU load, 0–100. Meaningful only because this reads the
+    /// poller's own `System` — a fresh instance always reports zero.
+    pub cpu: f32,
+    /// 0–100, or `None` on a machine with no readable GPU counter.
+    pub gpu: Option<f32>,
+    /// Bytes.
+    pub memory_total: u64,
+    /// Bytes.
+    pub memory_used: u64,
+    /// Bytes. Zero when no usable volume was found.
+    pub disk_total: u64,
+    /// Bytes.
+    pub disk_used: u64,
+    /// Which volume the disk numbers describe, e.g. "/" or "C:\\".
+    pub disk_name: String,
+}
+
+/// The volume worth showing: the biggest fixed one. macOS splits the boot
+/// container across `/` and `/System/Volumes/Data` and both report the same
+/// total, Linux lands on `/`, Windows on `C:` — one rule, no `#[cfg]`.
+///
+/// Takes `(total_space, is_removable)` rather than the disks themselves so the
+/// rule can be tested without a real filesystem.
+fn primary_index(disks: impl IntoIterator<Item = (u64, bool)>) -> Option<usize> {
+    disks
+        .into_iter()
+        .enumerate()
+        .filter(|(_, (total, removable))| !removable && *total > 0)
+        .max_by_key(|(_, (total, _))| *total)
+        .map(|(i, _)| i)
+}
+
+/// Measure host load. Called once per tick, never per reader.
+fn measure(sys: &System) -> SystemStats {
+    // NOT `used_memory()`. On macOS that is `total - free`, and macOS keeps
+    // almost nothing free — it lends the rest out as cache — so the figure
+    // sits pinned near the total and barely moves: 13.5 of 16 GB on an idle
+    // machine, which reads as a permanent 85%. `total - available` counts
+    // reclaimable cache as free, which is both the honest answer to "how much
+    // room is left" and a number that actually moves.
+    let memory_total = sys.total_memory();
+    let memory_used = memory_total.saturating_sub(sys.available_memory());
+
+    // Disks are not part of the port scan, so they are enumerated here — a
+    // statfs per mount, unlike the `simctl`/`docker` subprocesses that had to
+    // be moved off this tick.
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let list = disks.list();
+    let chosen = primary_index(list.iter().map(|d| (d.total_space(), d.is_removable())));
+    let (disk_total, disk_used, disk_name) = match chosen.and_then(|i| list.get(i)) {
+        Some(d) => (
+            d.total_space(),
+            d.total_space().saturating_sub(d.available_space()),
+            d.mount_point().to_string_lossy().into_owned(),
+        ),
+        None => (0, 0, String::new()),
+    };
+
+    SystemStats {
+        cpu: sys.global_cpu_usage(),
+        gpu: crate::gpu::usage(),
+        memory_total,
+        memory_used,
+        disk_total,
+        disk_used,
+        disk_name,
+    }
+}
+
+/// Host-wide CPU, GPU, RAM and disk, as of the last tick.
+#[tauri::command]
+pub fn get_system_stats(watch: tauri::State<Watch>) -> SystemStats {
+    watch.inner.lock().unwrap().stats.clone()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +294,16 @@ mod tests {
             cpu: 0.0,
             family: pid,
         }
+    }
+
+    #[test]
+    fn the_primary_disk_is_the_biggest_fixed_one() {
+        // A big external drive must not displace the boot volume, and a
+        // zero-sized pseudo-mount must not win by default.
+        let disks = [(500, false), (2_000, true), (900, false), (0, false)];
+        assert_eq!(primary_index(disks), Some(2));
+        assert_eq!(primary_index([(1_000, true)]), None, "removable only");
+        assert_eq!(primary_index([]), None);
     }
 
     #[test]

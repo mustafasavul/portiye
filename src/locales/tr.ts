@@ -25,8 +25,16 @@ export const tr: Strings = {
   "devices.title": "Cihazlar",
   "devices.runtimes": "Çalışma zamanları",
   "devices.count": "{running} / {total} çalışıyor",
+
   "devices.empty":
     "Emülatör veya simülatör bulunamadı. Android Studio'da bir tane oluşturun ya da iOS cihazları için Xcode kurun.",
+
+  "system.title": "Sistem",
+  "system.cpu": "İşlemci",
+  "system.gpu": "GPU",
+  "system.memory": "Bellek",
+  "system.disk": "Disk",
+  "system.load": "anlık yük",
 
   "device.launch": "Başlat",
   "device.stop": "Durdur",

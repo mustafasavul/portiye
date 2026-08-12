@@ -11,6 +11,7 @@ import { usePersisted } from "./hooks/usePersisted";
 import { useShortcuts } from "./hooks/useShortcuts";
 import { Toolbar } from "./components/Toolbar";
 import { DevicePanel } from "./components/DevicePanel";
+import { SystemPanel } from "./components/SystemPanel";
 import { FastKill } from "./components/FastKill";
 import { PortTable } from "./components/PortTable";
 import { History } from "./components/History";
@@ -31,6 +32,7 @@ import type {
   Simulator,
   Sort,
   SortKey,
+  SystemStats,
 } from "./types";
 
 export default function App() {
@@ -40,6 +42,7 @@ export default function App() {
   const [sims, setSims] = useState<Simulator[]>([]);
   const [runtimes, setRuntimes] = useState<RuntimeItem[]>([]);
   const [ports, setPorts] = useState<PortEntry[]>([]);
+  const [system, setSystem] = useState<SystemStats | null>(null);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "port", dir: 1 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -66,7 +69,12 @@ export default function App() {
    */
   const refreshPorts = useCallback(async () => {
     try {
-      setPorts(await invoke<PortEntry[]>("get_listening_ports"));
+      const [p, s] = await Promise.all([
+        invoke<PortEntry[]>("get_listening_ports"),
+        invoke<SystemStats>("get_system_stats"),
+      ]);
+      setPorts(p);
+      setSystem(s);
       setError(null);
     } catch (e) {
       setError(String(e));
@@ -596,6 +604,8 @@ export default function App() {
           ask={ask}
         />
       )}
+
+      <SystemPanel stats={system} />
 
       <section className="panel panel--fill">
         <div className="panel__head panel__head--tools">

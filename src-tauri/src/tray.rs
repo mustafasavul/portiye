@@ -28,6 +28,18 @@ const MAX_FAMILIES: usize = 30;
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     let menu = Menu::new(app)?;
 
+    // One glance line of host load, disabled so it reads as a readout rather
+    // than something to click.
+    let stats = crate::watch::get_system_stats(app.state::<crate::watch::Watch>());
+    menu.append(&MenuItem::with_id(
+        app,
+        "stats",
+        stats_line(&stats),
+        false,
+        None::<&str>,
+    )?)?;
+    menu.append(&PredefinedMenuItem::separator(app)?)?;
+
     // Reads the watcher's last scan — the tray must never run its own.
     let ports = crate::watch::get_listening_ports(app.state::<crate::watch::Watch>());
     if ports.is_empty() {
@@ -74,6 +86,36 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
         None::<&str>,
     )?)?;
     Ok(menu)
+}
+
+/// The one-line readout at the top of the menu.
+///
+/// Whatever this machine cannot measure is left out rather than shown as a
+/// confident zero: no readable GPU counter, no `GPU` segment; no fixed volume,
+/// no `DISK` segment.
+///
+/// ponytail: the four labels are borrowed acronyms in every language the app
+/// ships, so this needs no entry in `i18n.rs` — and the tray's dictionary is
+/// hand-written across 28 locales with no native review beyond two of them.
+/// The window beside it already spells the words out in full.
+fn stats_line(s: &crate::watch::SystemStats) -> String {
+    let pct = |used: u64, total: u64| {
+        if total == 0 {
+            0
+        } else {
+            (used as f64 / total as f64 * 100.0).round() as u32
+        }
+    };
+
+    let mut parts = vec![format!("CPU {}%", s.cpu.round() as u32)];
+    if let Some(gpu) = s.gpu {
+        parts.push(format!("GPU {}%", gpu.round() as u32));
+    }
+    parts.push(format!("RAM {}%", pct(s.memory_used, s.memory_total)));
+    if s.disk_total > 0 {
+        parts.push(format!("DISK {}%", pct(s.disk_used, s.disk_total)));
+    }
+    parts.join("  ·  ")
 }
 
 /// `Submenu::with_items` wants trait objects; every caller here has a plain
@@ -329,6 +371,41 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_readout_omits_what_the_machine_cannot_measure() {
+        let full = crate::watch::SystemStats {
+            cpu: 45.4,
+            gpu: Some(0.0),
+            memory_total: 16,
+            memory_used: 9,
+            disk_total: 100,
+            disk_used: 96,
+            disk_name: "/".into(),
+        };
+        assert_eq!(
+            stats_line(&full),
+            "CPU 45%  ·  GPU 0%  ·  RAM 56%  ·  DISK 96%"
+        );
+
+        // No GPU counter and no fixed volume: those segments vanish rather
+        // than reporting a confident zero.
+        let bare = crate::watch::SystemStats {
+            gpu: None,
+            disk_total: 0,
+            disk_used: 0,
+            ..full
+        };
+        assert_eq!(stats_line(&bare), "CPU 45%  ·  RAM 56%");
+    }
+
+    #[test]
+    fn a_machine_that_reports_no_memory_does_not_divide_by_zero() {
+        assert_eq!(
+            stats_line(&crate::watch::SystemStats::default()),
+            "CPU 0%  ·  RAM 0%"
+        );
+    }
 
     /// The tray builds its menu on the main thread during startup, so anything
     /// that panics here takes the whole app down before a window appears. This

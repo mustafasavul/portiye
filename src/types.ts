@@ -3,6 +3,19 @@ import type { Key } from "./i18n";
 /** Shapes shared across the panels. Kept here so components stop importing
  *  each other just to borrow a type. */
 
+/** Host-wide load. Bytes for memory and disk, 0–100 for cpu. */
+export type SystemStats = {
+  cpu: number;
+  /** Null on a machine with no readable GPU counter — the gauge is hidden. */
+  gpu: number | null;
+  memory_total: number;
+  memory_used: number;
+  disk_total: number;
+  disk_used: number;
+  /** Mount point the disk figures describe. Empty when none was found. */
+  disk_name: string;
+};
+
 export type PortEntry = {
   pid: number;
   port: number;

@@ -307,6 +307,146 @@ body {
   color: var(--color-muted);
 }
 
+/* ——— System gauges ——————————————————————————————————
+ * Whole-machine CPU, RAM and disk, sitting between the devices and the ports.
+ * Deliberately host-wide: emulators share the host and iOS simulators are not
+ * isolated processes, so there is no honest per-device number to show.
+ *
+ * The bar is a rectangle with the same 6px radius as everything else — Cobalt
+ * is drawn with a ruler, and a pill-shaped meter would be the one round thing
+ * in the window.
+ */
+
+.panel--system .panel__head {
+  padding-bottom: var(--space-2xs);
+}
+
+.gauges {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  gap: var(--space-xs);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.gauge {
+  min-width: 0;
+  padding: var(--space-xs) var(--space-sm);
+  border: var(--rule) solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  background: var(--color-paper-2);
+  /* Every gauge resolves its colour through one variable, so the level only
+     has to be stated once per state below. */
+  --gauge-tint: var(--color-accent);
+}
+
+.gauge[data-level="high"] {
+  --gauge-tint: var(--color-warn);
+}
+
+.gauge[data-level="critical"] {
+  --gauge-tint: var(--color-danger);
+  border-color: var(--color-danger-soft);
+}
+
+.gauge__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+}
+
+/* Tinted with the gauge so the icon reads as part of the reading, not as a
+   button someone forgot to wire up. */
+.gauge__icon {
+  display: flex;
+  flex: 0 0 auto;
+  color: var(--gauge-tint);
+}
+
+.gauge__icon svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+.gauge__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  line-height: 1.1; /* gate 55 — all-caps display never below 1.0 */
+  color: var(--color-muted);
+}
+
+.gauge__value {
+  font-family: var(--font-display);
+  font-size: var(--text-md);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--track-tight);
+  line-height: 1.1;
+  color: var(--gauge-tint);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.gauge__track {
+  block-size: 4px;
+  margin-block: var(--space-2xs);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper-3);
+  overflow: hidden;
+}
+
+.gauge__fill {
+  block-size: 100%;
+  border-radius: inherit;
+  background: var(--gauge-tint);
+  /* Polls land every five seconds; easing the step keeps a jump from reading
+     as a re-render. */
+  transition: inline-size var(--dur-base) var(--ease-out);
+}
+
+.gauge__detail {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  /* Machine text: bidi would otherwise render "13.5 GB / 16.0 GB" backwards. */
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+/* The figure is the point of the row; it holds its line and the mount point
+   behind it is what gives way. */
+.gauge__detail > :first-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.gauge__note {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-inline-start: auto;
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gauge__fill {
+    transition: none;
+  }
+}
+
 .panel__body {
   padding: 0 var(--space-md) var(--space-md);
 }
@@ -868,6 +1008,12 @@ body {
    * no other affordance. */
   .port__pid,
   .port__mem {
+    display: none;
+  }
+
+  /* A mount point squeezed to "…" is worse than no mount point. The figure
+   * next to it is the number that matters. */
+  .gauge__note {
     display: none;
   }
 
