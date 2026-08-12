@@ -255,7 +255,27 @@ pub struct KillReport {
     pub elevation: String,
 }
 
+/// Is this program on `PATH`? Used to decide whether an elevated retry can be
+/// offered at all, rather than offering it and failing at the prompt.
+#[cfg(target_os = "linux")]
+fn on_path(program: &str) -> bool {
+    std::env::var_os("PATH")
+        .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(program).is_file()))
+        .unwrap_or(false)
+}
+
+/// What to tell the user before asking for a password — and empty when this
+/// machine has no way to ask. macOS always has `osascript` and Windows always
+/// has PowerShell, but `pkexec` is a polkit package that plenty of Linux
+/// installs (containers, WSL, minimal servers) simply do not carry. An empty
+/// hint means the window offers no elevated retry instead of a button that
+/// can only produce "No such file or directory".
 fn elevation_hint() -> String {
+    #[cfg(target_os = "linux")]
+    if !on_path("pkexec") {
+        return String::new();
+    }
+
     crate::i18n::t(if cfg!(target_os = "macos") {
         "elevate.macos"
     } else if cfg!(target_os = "windows") {

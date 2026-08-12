@@ -40,8 +40,28 @@
       const listeners = new Map();
       let nextCb = 1;
 
+      /** Commands this fake machine has no tool for. Add ids, then refresh. */
+      window.__missing = new Set();
+      /** Retunable at runtime, so one page can play several machines. */
+      window.__fixtures = null;
+
       const fixtures = {
         get_listening_ports: () => ports,
+        // CPU lands in the red band and disk in the amber one, so one load of
+        // the harness shows every gauge state at once. CPU, GPU and memory
+        // drift on each poll — a frozen reading is the bug this panel had.
+        get_system_stats: () => {
+          const drift = (base, spread) => base + (Math.random() - 0.5) * spread;
+          return {
+            cpu: drift(91, 12),
+            gpu: drift(46, 30),
+            memory_total: 16 * 1073741824,
+            memory_used: drift(9.6, 1.2) * 1073741824,
+            disk_total: 994 * 1073741824,
+            disk_used: 806 * 1073741824,
+            disk_name: "/System/Volumes/Data",
+          };
+        },
         get_port_history: () => history,
         clear_port_history: () => null,
         set_locale: () => null,
@@ -73,6 +93,8 @@
         export_logs: (a) => `/Users/dev/Downloads/portiye-${a.source.replace(/[:.\/]/g,"-")}.log`,
       };
 
+      window.__fixtures = fixtures;
+
       window.__TAURI_INTERNALS__ = {
         transformCallback(cb) {
           const id = nextCb++;
@@ -88,6 +110,11 @@
           }
           if (cmd === "plugin:event|unlisten") return Promise.resolve(null);
           if (cmd.startsWith("plugin:")) return Promise.resolve(null);
+          // `__missing` stands in for a toolchain this machine does not have:
+          // no Android SDK, no Xcode, no Docker. One of them failing must
+          // never blank the other two panels.
+          if (window.__missing.has(cmd))
+            return Promise.reject(`${cmd} not found: No such file or directory`);
           const f = fixtures[cmd];
           if (!f) return Promise.reject(`no fixture for ${cmd}`);
           return Promise.resolve(f(args || {}));

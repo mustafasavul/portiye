@@ -78,10 +78,16 @@ fn running_serials() -> Vec<(String, String)> {
 
 #[tauri::command]
 pub fn list_avds() -> Result<Vec<Avd>, String> {
-    let out = crate::ports::cmd(sdk_tool("emulator", "emulator"))
+    // No Android SDK -> just show nothing, the same contract `list_simulators`
+    // keeps for a machine without Xcode. Returning `Err` here blanked the
+    // Devices *and* Runtimes panels together, because the window fetches all
+    // three lists in one `Promise.allSettled` and this one rejected.
+    let Ok(out) = crate::ports::cmd(sdk_tool("emulator", "emulator"))
         .arg("-list-avds")
         .output()
-        .map_err(|e| format!("emulator not found: {e}"))?;
+    else {
+        return Ok(vec![]);
+    };
 
     let running = running_serials();
 

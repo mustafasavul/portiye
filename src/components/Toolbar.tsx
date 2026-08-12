@@ -24,6 +24,7 @@ export function Toolbar({
   format,
   onFormat,
   onExport,
+  canStreamLogs,
 }: {
   view: View;
   onView: (v: View) => void;
@@ -33,9 +34,13 @@ export function Toolbar({
   format: "json" | "csv";
   onFormat: (f: "json" | "csv") => void;
   onExport: () => void;
+  /** False on a machine with neither Xcode nor the Android SDK — the tab is
+   *  dropped rather than opening onto a picker that can never be filled. */
+  canStreamLogs: boolean;
 }) {
   const { t, locale, setLocale } = useI18n();
   const autostart = useAutostart();
+  const views = VIEWS.filter((v) => v.id !== "logs" || canStreamLogs);
 
   return (
     <header className="toolbar">
@@ -46,7 +51,7 @@ export function Toolbar({
       {/* Radio semantics: exactly one view is active, and arrow keys move
           between them the way a tab strip should. */}
       <div className="tabs" role="tablist" aria-label={t("nav.view")}>
-        {VIEWS.map((v) => (
+        {views.map((v) => (
           <button
             key={v.id}
             role="tab"

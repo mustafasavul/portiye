@@ -81,18 +81,24 @@ export default function App() {
    * this runs on demand and on a slow timer instead.
    */
   const refreshDevices = useCallback(async () => {
-    try {
-      const [a, s, r] = await Promise.all([
-        invoke<Avd[]>("list_avds"),
-        invoke<Simulator[]>("list_simulators"),
-        invoke<RuntimeItem[]>("list_runtimes"),
-      ]);
-      setAvds(a);
-      setSims(s);
-      setRuntimes(r);
-    } catch (e) {
-      setError(String(e));
-    }
+    // `allSettled`, not `all`: these three enumerate three unrelated toolchains
+    // and most machines have only some of them. Under `all`, one missing tool
+    // rejected the whole batch, so a box without the Android SDK lost its
+    // simulators and its Docker containers too — and got a banner about
+    // `emulator` every 30 seconds for the privilege.
+    const [a, s, r] = await Promise.allSettled([
+      invoke<Avd[]>("list_avds"),
+      invoke<Simulator[]>("list_simulators"),
+      invoke<RuntimeItem[]>("list_runtimes"),
+    ]);
+    if (a.status === "fulfilled") setAvds(a.value);
+    if (s.status === "fulfilled") setSims(s.value);
+    if (r.status === "fulfilled") setRuntimes(r.value);
+
+    // A lister that fails is a real fault worth showing — but it clears itself
+    // on the next good pass rather than waiting for an unrelated port tick.
+    const failed = [a, s, r].find((x) => x.status === "rejected");
+    setError(failed ? String(failed.reason) : null);
   }, []);
 
   // The tray menu is drawn in Rust and cannot read the webview's dictionary,
@@ -124,6 +130,19 @@ export default function App() {
       un.then((f) => f());
     };
   }, [refresh, refreshPorts, refreshDevices]);
+
+  /**
+   * Log streaming needs `simctl` or `adb`, so a machine with neither Xcode nor
+   * the Android SDK has no source and never will — the tab is hidden instead
+   * of opening onto an empty picker. Stopped devices still count: the answer
+   * there is "boot one", which the panel already says.
+   */
+  const canStreamLogs = avds.length > 0 || sims.length > 0;
+
+  // Losing the tab while standing on it would leave a blank window.
+  useEffect(() => {
+    if (!canStreamLogs && view === "logs") setView("ports");
+  }, [canStreamLogs, view]);
 
   /** Runs an action with a busy lock, surfacing failures in the banner. */
   const run = async (id: string, action: () => Promise<void>) => {
@@ -395,7 +414,10 @@ export default function App() {
           ),
         });
 
-      if (report.denied.length > 0) {
+      // An empty hint means this machine has no way to ask for a password
+      // (Linux without polkit), so the refusal is reported without offering a
+      // retry that could only fail.
+      if (report.denied.length > 0 && report.elevation) {
         const elevate = await ask({
           title: t("kill.deniedTitle", {
             n: report.denied.length,
@@ -508,6 +530,7 @@ export default function App() {
         format={format}
         onFormat={setFormat}
         onExport={exportSnapshot}
+        canStreamLogs={canStreamLogs}
       />
 
       {error && (

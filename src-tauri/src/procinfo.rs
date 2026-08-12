@@ -41,7 +41,16 @@ fn name_of(sys: &System, pid: u32) -> String {
         .unwrap_or_else(|| "unknown".into())
 }
 
+/// Windows has no per-process open-file table we can read without a driver, so
+/// it says so once instead of reporting an errno about a Unix tool that was
+/// never going to be there.
+#[cfg(not(unix))]
+fn lsof_for(_pid: u32) -> Result<(Vec<String>, Vec<String>), String> {
+    Err("Per-process files and sockets are not available on this platform.".into())
+}
+
 /// `lsof -p <pid>` split into network connections and plain files.
+#[cfg(unix)]
 fn lsof_for(pid: u32) -> Result<(Vec<String>, Vec<String>), String> {
     let bin = ["/usr/sbin/lsof", "/usr/bin/lsof"]
         .into_iter()
