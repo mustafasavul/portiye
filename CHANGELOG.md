@@ -4,6 +4,46 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+### Added
+
+- A **System** panel between the devices and the ports: whole-machine CPU,
+  GPU, memory and disk, each with a bar that turns amber past 75% and red
+  past 90%. The same four figures appear as a one-line readout at the top of
+  the tray menu, so `CPU 45% · GPU 0% · RAM 55% · DISK 96%` is one click away
+  without opening the window.
+- GPU load where the platform will give it up without root: `ioreg` on macOS,
+  `gpu_busy_percent` or `nvidia-smi` on Linux, `nvidia-smi` on Windows.
+
+  These are host-wide figures deliberately. Emulators and simulators share the
+  machine — an iOS simulator is not an isolated process at all — so there is no
+  honest per-device number to put in a row.
+
+### Fixed
+
+- A machine without the Android SDK lost its **simulators and its Docker
+  containers too**, and showed an `emulator not found` banner every 30
+  seconds. `list_avds` returned an error where `list_simulators` returned an
+  empty list, and the window fetched all three with `Promise.all`, so one
+  rejection discarded the two results that did arrive. Listers now agree that
+  a missing toolchain is a machine, not a fault, and the window uses
+  `allSettled`.
+- Memory read a near-constant 85% and never moved. `sysinfo`'s `used_memory()`
+  is `total - free`, and macOS keeps almost nothing free — it lends the rest
+  out as cache — so the number sat pinned near the total. It is now
+  `total - available`, which answers "how much room is left" and actually
+  changes.
+
+### Changed
+
+- Nothing a platform cannot show is drawn any more: no GPU counter, no GPU
+  gauge; no fixed volume, no disk gauge; the Device Logs tab is gone on a
+  machine with neither Xcode nor the Android SDK; the elevated-retry button
+  is gone on a Linux box without polkit; and Windows no longer reports an
+  `lsof` error in every process detail panel about a tool it was never going
+  to have.
+
 ## [0.2.1]
 
 ### Fixed
