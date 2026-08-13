@@ -4,6 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0]
+
+### Added
+
+- **The address other devices can reach.** The machine's LAN address is stated
+  once in the toolbar (`LAN IP 192.168.1.126`), and every port bound past
+  loopback carries a chip with the full `ip:port` under its process. That is
+  the address you type into a phone to test a dev server on a real device — a
+  port bound to `127.0.0.1` gets no chip, because a phone cannot reach it.
+  Clicking a chip opens it in the default browser.
+- **The port number is a link.** `:4321` opens `http://localhost:4321`, the
+  same address the dev server printed in your terminal.
+- **CPU and disk columns**, both sortable. Disk is bytes per second read plus
+  written over the tick that just ended, and idle reads as a dash rather than
+  `0 KB/s`.
+- **Per-process GPU on NVIDIA machines** — the number that matters when a model
+  is resident. `nvidia-smi pmon` is the only per-process source, and one
+  invocation costs a whole sample interval, so it is started once and left
+  streaming: a long-lived child printing a block every five seconds, read as it
+  arrives, at no cost to the poll loop. Where `pmon` is not a subcommand
+  (Windows) it falls back to `--query-compute-apps`, which reports video memory
+  but no SM share. The column exists only where something is reporting.
+- **Devices group by platform.** Ten devices in one grid is a pile; Apple's sit
+  together, Android's sit together, and the panel scrolls at 40vh instead of
+  growing until the port table has nowhere left to go. A machine with a single
+  platform sees no subhead — it would only repeat the panel title.
+
 ## [0.3.0]
 
 ### Added
