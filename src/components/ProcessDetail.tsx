@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { CloseIcon } from "../icons";
+import { LanChips } from "./PortTable";
 import { useT } from "../i18n";
-import { mb } from "../types";
+import { mb, rate } from "../types";
 
 type Relative = { pid: number; name: string };
 
@@ -14,6 +15,10 @@ type Detail = {
   user: string;
   memory: number;
   cpu: number;
+  /** Disk bytes per second, read + written. */
+  disk: number;
+  gpu: number | null;
+  gpu_memory: number;
   uptime: number;
   ancestors: Relative[];
   children: Relative[];
@@ -41,10 +46,15 @@ export function ProcessDetail({
   pid,
   onClose,
   onKill,
+  lanIp,
+  lanPorts,
 }: {
   pid: number;
   onClose: () => void;
   onKill: () => void;
+  lanIp: string | null;
+  /** This process's ports that a device on the same network can reach. */
+  lanPorts: number[];
 }) {
   const t = useT();
   const [detail, setDetail] = useState<Detail | null>(null);
@@ -99,7 +109,28 @@ export function ProcessDetail({
                   <dd className="facts__wrap">{detail.cwd}</dd>
                 </>
               )}
+              {/* The gauges already translate "Disk"; no second string for it. */}
+              <dt>{t("system.disk")}</dt>
+              <dd>{rate(detail.disk)}</dd>
+              {/* NVIDIA-only, and absent rather than zeroed everywhere else. */}
+              {(detail.gpu !== null || detail.gpu_memory > 0) && (
+                <>
+                  <dt>{t("system.gpu")}</dt>
+                  <dd>
+                    {detail.gpu !== null && `${Math.round(detail.gpu)}%`}
+                    {detail.gpu !== null && detail.gpu_memory > 0 && " · "}
+                    {detail.gpu_memory > 0 && mb(detail.gpu_memory)}
+                  </dd>
+                </>
+              )}
             </dl>
+
+            {lanPorts.length > 0 && (
+              <>
+                <h3 className="detail__section">{t("lan.reachable")}</h3>
+                <LanChips ip={lanIp} ports={lanPorts} />
+              </>
+            )}
 
             {detail.command && (
               <>

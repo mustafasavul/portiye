@@ -18,6 +18,10 @@ export const vi: Strings = {
   "toolbar.autostartOn": "portiye khởi chạy cùng phiên của bạn",
   "toolbar.autostartOff": "portiye không khởi chạy cùng phiên của bạn",
 
+  "lan.address": "Địa chỉ của máy này trên mạng",
+  "lan.reachable": "Có thể truy cập từ thiết bị khác trong mạng này",
+  "lan.open": "Mở {url}",
+
   "banner.dismiss": "Đóng",
   "banner.dismissError": "Đóng lỗi",
   "banner.reveal": "Hiện trong thư mục",

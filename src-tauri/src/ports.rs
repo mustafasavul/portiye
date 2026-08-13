@@ -22,10 +22,48 @@ pub struct PortEntry {
     /// Percent of one core. Zero on the very first scan — sysinfo needs two
     /// samples of the same `System` to have anything to compare.
     pub cpu: f32,
+    /// Disk bytes per second, read + written, over the tick that just ended.
+    /// Like `cpu` this is a rate between two samples, so it is 0 on the first.
+    pub disk: u64,
+    /// Percent of the GPU's SMs, from NVIDIA's own sampler. `None` on every
+    /// machine without one — there is no per-process GPU share to be had from
+    /// macOS, from Windows' generic counters, or from Intel/AMD on Linux, and a
+    /// column of zeroes would read as "nothing is using the GPU" rather than
+    /// "nobody can tell you".
+    pub gpu: Option<f32>,
+    /// Video memory held by this process, in bytes. 0 when unknown.
+    pub gpu_memory: u64,
     /// PID of the highest ancestor that is *also* listening, or this PID when
     /// the process has no listening ancestor. Rows sharing a family belong to
     /// one tree — `emulator` spawning `qemu`, `adb` spawning its server.
     pub family: u32,
+    /// Bound to something other than loopback, so a phone on the same Wi-Fi can
+    /// reach it at `http://<lan ip>:<port>`. A `127.0.0.1`-only server cannot.
+    pub lan: bool,
+}
+
+/// Is a listening address reachable from the rest of the network? Everything
+/// that is not loopback is: `*`, `0.0.0.0`, `::`, and an explicit LAN address
+/// a server was pinned to. Takes lsof / netstat's `host:port` text.
+fn lan_reachable(addr: &str) -> bool {
+    let (host, _) = addr.rsplit_once(':').unwrap_or((addr, ""));
+    let host = host.trim_matches(|c| c == '[' || c == ']');
+    !(host == "localhost" || host == "::1" || host.starts_with("127."))
+}
+
+/// This machine's address on the LAN, for typing into a phone's browser.
+///
+/// The UDP socket is never sent on — `connect` only asks the routing table
+/// which interface would carry the packet, which is exactly the address the
+/// other devices on that network see. `None` when nothing is routable (no
+/// Wi-Fi, no Ethernet), because a bogus address is worse than no address.
+#[tauri::command]
+pub fn local_ip() -> Option<String> {
+    let sock = std::net::UdpSocket::bind("0.0.0.0:0").ok()?;
+    // Any off-link address works; nothing is transmitted.
+    sock.connect("1.1.1.1:80").ok()?;
+    let ip = sock.local_addr().ok()?.ip();
+    (!ip.is_loopback() && !ip.is_unspecified()).then(|| ip.to_string())
 }
 
 /// Walk up the process tree and return the topmost ancestor that also holds a
@@ -112,7 +150,7 @@ pub fn cmd(program: impl AsRef<std::ffi::OsStr>) -> Command {
 /// ```
 // Both parsers are always compiled so the tests run on any host.
 #[allow(dead_code)]
-fn parse_lsof(stdout: &str) -> Vec<(u32, u16)> {
+fn parse_lsof(stdout: &str) -> Vec<(u32, u16, bool)> {
     stdout
         .lines()
         .skip(1) // header
@@ -122,13 +160,13 @@ fn parse_lsof(stdout: &str) -> Vec<(u32, u16)> {
             // NAME is the column right before "(LISTEN)": "*:3000", "127.0.0.1:5432"
             let addr = cols.iter().rev().find(|c| c.contains(':'))?;
             let port = addr.rsplit(':').next()?.parse().ok()?;
-            Some((pid, port))
+            Some((pid, port, lan_reachable(addr)))
         })
         .collect()
 }
 
 #[allow(dead_code)]
-fn parse_netstat(stdout: &str) -> Vec<(u32, u16)> {
+fn parse_netstat(stdout: &str) -> Vec<(u32, u16, bool)> {
     stdout
         .lines()
         .filter(|l| l.contains("LISTENING"))
@@ -136,14 +174,15 @@ fn parse_netstat(stdout: &str) -> Vec<(u32, u16)> {
             let cols: Vec<&str> = line.split_whitespace().collect();
             let pid = cols.last()?.parse().ok()?;
             // Local Address is col 1; IPv6 looks like "[::]:3000" so take after last ':'
-            let port = cols.get(1)?.rsplit(':').next()?.parse().ok()?;
-            Some((pid, port))
+            let addr = cols.get(1)?;
+            let port = addr.rsplit(':').next()?.parse().ok()?;
+            Some((pid, port, lan_reachable(addr)))
         })
         .collect()
 }
 
 #[cfg(unix)]
-fn raw_pairs() -> Result<Vec<(u32, u16)>, String> {
+fn raw_pairs() -> Result<Vec<(u32, u16, bool)>, String> {
     // GUI-launched apps get a minimal PATH, so try the absolute paths first.
     let bin = ["/usr/sbin/lsof", "/usr/bin/lsof"]
         .into_iter()
@@ -165,7 +204,7 @@ fn raw_pairs() -> Result<Vec<(u32, u16)>, String> {
 ///   TCP    0.0.0.0:3000       0.0.0.0:0         LISTENING  12345
 /// ```
 #[cfg(windows)]
-fn raw_pairs() -> Result<Vec<(u32, u16)>, String> {
+fn raw_pairs() -> Result<Vec<(u32, u16, bool)>, String> {
     let out = cmd("netstat")
         .args(["-ano", "-p", "TCP"])
         .output()
@@ -178,15 +217,25 @@ fn raw_pairs() -> Result<Vec<(u32, u16)>, String> {
 /// previous sample to compare against — a fresh `System` always reports 0.
 pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
     sys.refresh_all();
-    let mut pairs = raw_pairs()?;
+    // One process can hold the same port on two addresses (IPv4 + IPv6, or
+    // loopback + wildcard). Merge them into one row, LAN-reachable if *any* of
+    // them is — that is the one a phone can hit.
+    let mut merged: HashMap<(u32, u16), bool> = HashMap::new();
+    for (pid, port, lan) in raw_pairs()? {
+        let e = merged.entry((pid, port)).or_insert(false);
+        *e |= lan;
+    }
+    let mut pairs: Vec<(u32, u16, bool)> = merged
+        .into_iter()
+        .map(|((p, n), lan)| (p, n, lan))
+        .collect();
     pairs.sort_unstable();
-    pairs.dedup();
 
     let home = home_dir();
 
     // Ancestry of every listener, walked once up front so `family_root` is a
     // pure lookup rather than a repeated system query.
-    let listeners: HashSet<u32> = pairs.iter().map(|(pid, _)| *pid).collect();
+    let listeners: HashSet<u32> = pairs.iter().map(|(pid, _, _)| *pid).collect();
     let mut parent_of: HashMap<u32, u32> = HashMap::new();
     for &pid in &listeners {
         let mut cur = pid;
@@ -208,8 +257,9 @@ pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
 
     let mut entries: Vec<PortEntry> = pairs
         .into_iter()
-        .map(|(pid, port)| {
+        .map(|(pid, port, lan)| {
             let proc = sys.process(Pid::from_u32(pid));
+            let gpu = crate::gpu::per_process(pid);
             let argv = proc
                 .map(|p| {
                     p.cmd()
@@ -231,7 +281,20 @@ pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
                 detail: detail_for(&argv, cwd.as_deref(), home.as_deref()),
                 memory: proc.map(|p| p.memory()).unwrap_or(0),
                 cpu: proc.map(|p| p.cpu_usage()).unwrap_or(0.0),
+                // `disk_usage()` counts since the previous refresh, and that
+                // refresh is one poll tick ago — so this divides into a rate.
+                disk: proc
+                    .map(|p| {
+                        let d = p.disk_usage();
+                        (d.read_bytes + d.written_bytes) / crate::watch::POLL.as_secs().max(1)
+                    })
+                    .unwrap_or(0),
                 family: family_root(pid, &parent_of, &listeners),
+                // A cached read of the NVIDIA sampler's table, not a probe:
+                // nothing here shells out per process.
+                gpu: gpu.and_then(|g| g.sm),
+                gpu_memory: gpu.map(|g| g.memory).unwrap_or(0),
+                lan,
             }
         })
         .collect();
@@ -480,7 +543,7 @@ rapportd    555   me    5u  IPv6 0x1a2b3c4d5e6f7892      0t0  TCP [::1]:49152 (L
 ";
         assert_eq!(
             parse_lsof(out),
-            vec![(12345, 3000), (987, 5432), (555, 49152)]
+            vec![(12345, 3000, true), (987, 5432, false), (555, 49152, false)]
         );
     }
 
@@ -625,7 +688,7 @@ Active Connections
 ";
         assert_eq!(
             parse_netstat(out),
-            vec![(12345, 3000), (987, 5432), (42, 8080)]
+            vec![(12345, 3000, true), (987, 5432, false), (42, 8080, true)]
         );
     }
 }

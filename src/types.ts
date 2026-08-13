@@ -22,7 +22,17 @@ export type PortEntry = {
   name: string;
   detail: string;
   memory: number;
+  cpu: number;
+  /** Disk bytes per second, read + written. */
+  disk: number;
+  /** Percent of the GPU's SMs. Null unless NVIDIA's own sampler is running —
+   *  no other platform reports a per-process share. */
+  gpu: number | null;
+  /** Video memory held, in bytes. 0 when unknown. */
+  gpu_memory: number;
   family: number;
+  /** Bound past loopback: reachable from a phone on the same network. */
+  lan: boolean;
 };
 
 /** One process, with every port it holds. */
@@ -31,7 +41,13 @@ export type Proc = {
   name: string;
   detail: string;
   memory: number;
+  cpu: number;
+  disk: number;
+  gpu: number | null;
+  gpuMemory: number;
   ports: number[];
+  /** The subset of `ports` other devices on the LAN can reach. */
+  lanPorts: number[];
 };
 
 /** A process and its listening descendants — `emulator` + the `qemu` it spawned. */
@@ -98,15 +114,37 @@ export type Device = {
   resetWarning: string;
 };
 
-export type SortKey = "port" | "name" | "memory" | "pid" | "family";
+export type SortKey =
+  | "port"
+  | "name"
+  | "cpu"
+  | "disk"
+  | "gpu"
+  | "memory"
+  | "pid"
+  | "family";
 export type Sort = { key: SortKey; dir: 1 | -1 };
 
 /**
- * Memory and group read descending by default — you open memory to find the
- * biggest hog, and group to find the processes that belong to something.
+ * Memory, CPU, disk and group read descending by default — you open a load
+ * column to find the biggest hog, and group to find the processes that belong
+ * to something.
  */
 export const defaultDir = (key: SortKey): 1 | -1 =>
-  key === "memory" || key === "family" ? -1 : 1;
+  key === "memory" ||
+  key === "cpu" ||
+  key === "disk" ||
+  key === "gpu" ||
+  key === "family"
+    ? -1
+    : 1;
+
+/** Bytes per second, for the disk column. Idle is a dash, not "0 KB/s". */
+export const rate = (bytes: number) => {
+  if (bytes < 1024) return "—";
+  if (bytes < 1_048_576) return `${Math.round(bytes / 1024)} KB/s`;
+  return `${(bytes / 1_048_576).toFixed(1)} MB/s`;
+};
 
 export const mb = (bytes: number) =>
   bytes >= 1_073_741_824

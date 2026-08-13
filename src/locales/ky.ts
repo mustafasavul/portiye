@@ -18,6 +18,10 @@ export const ky: Strings = {
   "toolbar.autostartOn": "portiye сеансыңыз менен кошо ишке кирет",
   "toolbar.autostartOff": "portiye сеансыңыз менен кошо ишке кирбейт",
 
+  "lan.address": "Бул компьютердин тармактагы дареги",
+  "lan.reachable": "Бул тармактагы башка түзмөктөрдөн жеткиликтүү",
+  "lan.open": "{url} ачуу",
+
   "banner.dismiss": "Жабуу",
   "banner.dismissError": "Катаны жабуу",
   "banner.reveal": "Папкадан көрсөтүү",

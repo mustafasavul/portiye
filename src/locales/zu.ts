@@ -18,6 +18,10 @@ export const zu: Strings = {
   "toolbar.autostartOn": "i-portiye iqala kanye neseshini yakho",
   "toolbar.autostartOff": "i-portiye ayiqali kanye neseshini yakho",
 
+  "lan.address": "Ikheli lale mishini kunethiwekhi",
+  "lan.reachable": "Ifinyeleleka kwamanye amadivayisi kule nethiwekhi",
+  "lan.open": "Vula i-{url}",
+
   "banner.dismiss": "Vala",
   "banner.dismissError": "Vala iphutha",
   "banner.reveal": "Khombisa kufolda",

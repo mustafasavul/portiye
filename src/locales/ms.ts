@@ -18,6 +18,10 @@ export const ms: Strings = {
   "toolbar.autostartOn": "portiye bermula bersama sesi anda",
   "toolbar.autostartOff": "portiye tidak bermula bersama sesi anda",
 
+  "lan.address": "Alamat mesin ini pada rangkaian",
+  "lan.reachable": "Boleh dicapai daripada peranti lain dalam rangkaian ini",
+  "lan.open": "Buka {url}",
+
   "banner.dismiss": "Tutup",
   "banner.dismissError": "Tutup ralat",
   "banner.reveal": "Tunjuk dalam folder",

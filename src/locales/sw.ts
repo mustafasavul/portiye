@@ -18,6 +18,10 @@ export const sw: Strings = {
   "toolbar.autostartOn": "portiye huanza pamoja na kipindi chako",
   "toolbar.autostartOff": "portiye haianzi pamoja na kipindi chako",
 
+  "lan.address": "Anwani ya kompyuta hii kwenye mtandao",
+  "lan.reachable": "Inafikika kutoka vifaa vingine kwenye mtandao huu",
+  "lan.open": "Fungua {url}",
+
   "banner.dismiss": "Funga",
   "banner.dismissError": "Funga hitilafu",
   "banner.reveal": "Onyesha kwenye folda",

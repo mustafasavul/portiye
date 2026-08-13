@@ -18,6 +18,10 @@ export const th: Strings = {
   "toolbar.autostartOn": "portiye เปิดพร้อมเซสชันของคุณ",
   "toolbar.autostartOff": "portiye ไม่เปิดพร้อมเซสชันของคุณ",
 
+  "lan.address": "ที่อยู่ของเครื่องนี้ในเครือข่าย",
+  "lan.reachable": "เข้าถึงได้จากอุปกรณ์อื่นในเครือข่ายนี้",
+  "lan.open": "เปิด {url}",
+
   "banner.dismiss": "ปิด",
   "banner.dismissError": "ปิดข้อผิดพลาด",
   "banner.reveal": "แสดงในโฟลเดอร์",

@@ -18,6 +18,10 @@ export const bn: Strings = {
   "toolbar.autostartOn": "portiye আপনার সেশনের সঙ্গে চালু হয়",
   "toolbar.autostartOff": "portiye আপনার সেশনের সঙ্গে চালু হয় না",
 
+  "lan.address": "নেটওয়ার্কে এই মেশিনের ঠিকানা",
+  "lan.reachable": "এই নেটওয়ার্কের অন্য ডিভাইস থেকে অ্যাক্সেসযোগ্য",
+  "lan.open": "{url} খুলুন",
+
   "banner.dismiss": "বন্ধ করুন",
   "banner.dismissError": "ত্রুটি বন্ধ করুন",
   "banner.reveal": "ফোল্ডারে দেখান",

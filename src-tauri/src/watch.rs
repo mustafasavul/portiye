@@ -20,7 +20,7 @@ use tauri::{AppHandle, Emitter, Manager, Runtime};
 const HISTORY_CAP: usize = 500;
 /// A reopen within this window counts as a takeover rather than a restart.
 const CONFLICT_WINDOW_MS: u64 = 30_000;
-const POLL: std::time::Duration = std::time::Duration::from_secs(5);
+pub const POLL: std::time::Duration = std::time::Duration::from_secs(5);
 
 #[derive(Serialize, Clone, Debug)]
 pub struct PortEvent {
@@ -170,6 +170,10 @@ fn tick<R: Runtime>(app: &AppHandle<R>) {
 }
 
 pub fn start<R: Runtime>(app: &AppHandle<R>) {
+    // Its own thread, and a no-op on a machine with no NVIDIA tooling. It must
+    // not run on this loop: one `pmon` sample costs a whole interval.
+    crate::gpu::start_sampler();
+
     let app = app.clone();
     std::thread::spawn(move || loop {
         tick(&app);
@@ -292,7 +296,11 @@ mod tests {
             detail: String::new(),
             memory: 0,
             cpu: 0.0,
+            disk: 0,
+            gpu: None,
+            gpu_memory: 0,
             family: pid,
+            lan: false,
         }
     }
 

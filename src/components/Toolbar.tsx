@@ -25,6 +25,7 @@ export function Toolbar({
   onFormat,
   onExport,
   canStreamLogs,
+  lanIp,
 }: {
   view: View;
   onView: (v: View) => void;
@@ -37,6 +38,9 @@ export function Toolbar({
   /** False on a machine with neither Xcode nor the Android SDK — the tab is
    *  dropped rather than opening onto a picker that can never be filled. */
   canStreamLogs: boolean;
+  /** This machine's address on the LAN. Null off any network — then there is
+   *  nothing to type into a phone and the chip is dropped rather than zeroed. */
+  lanIp: string | null;
 }) {
   const { t, locale, setLocale } = useI18n();
   const autostart = useAutostart();
@@ -64,6 +68,16 @@ export function Toolbar({
           </button>
         ))}
       </div>
+
+      {/* The other half of the LAN chips in the table: the address is one per
+          machine, so it is stated once, up here, instead of on every row. */}
+      {lanIp && (
+        <span className="toolbar__ip" title={t("lan.address")}>
+          {/* An acronym, not prose — it reads the same in every locale. */}
+          <span className="toolbar__ip-label">LAN IP</span>
+          {lanIp}
+        </span>
+      )}
 
       <div className="toolbar__spacer" />
 

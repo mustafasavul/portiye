@@ -18,6 +18,10 @@ export const es: Strings = {
   "toolbar.autostartOn": "portiye se inicia con tu sesión",
   "toolbar.autostartOff": "portiye no se inicia con tu sesión",
 
+  "lan.address": "Dirección de este equipo en la red",
+  "lan.reachable": "Accesible desde otros dispositivos de esta red",
+  "lan.open": "Abrir {url}",
+
   "banner.dismiss": "Descartar",
   "banner.dismissError": "Descartar error",
   "banner.reveal": "Mostrar",

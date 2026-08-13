@@ -18,6 +18,10 @@ export const de: Strings = {
   "toolbar.autostartOn": "portiye startet mit deiner Sitzung",
   "toolbar.autostartOff": "portiye startet nicht mit deiner Sitzung",
 
+  "lan.address": "Adresse dieses Rechners im Netzwerk",
+  "lan.reachable": "Von anderen Geräten in diesem Netzwerk erreichbar",
+  "lan.open": "{url} öffnen",
+
   "banner.dismiss": "Schließen",
   "banner.dismissError": "Fehler schließen",
   "banner.reveal": "Im Ordner zeigen",

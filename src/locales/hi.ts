@@ -18,6 +18,10 @@ export const hi: Strings = {
   "toolbar.autostartOn": "portiye आपके सेशन के साथ शुरू होता है",
   "toolbar.autostartOff": "portiye आपके सेशन के साथ शुरू नहीं होता",
 
+  "lan.address": "नेटवर्क पर इस मशीन का पता",
+  "lan.reachable": "इस नेटवर्क के अन्य उपकरणों से पहुँच योग्य",
+  "lan.open": "{url} खोलें",
+
   "banner.dismiss": "बंद करें",
   "banner.dismissError": "त्रुटि बंद करें",
   "banner.reveal": "फ़ोल्डर में दिखाएँ",

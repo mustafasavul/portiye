@@ -91,6 +91,25 @@ body {
   color: var(--color-accent);
 }
 
+/* This machine's LAN address, stated once beside the wordmark. Selectable:
+   its whole job is to be read off and typed into a phone. */
+.toolbar__ip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-3xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.toolbar__ip-label {
+  font-family: var(--font-sans);
+  letter-spacing: 0.04em;
+  color: var(--color-ink-2);
+}
+
 .toolbar__spacer {
   flex: 1 1 var(--space-lg);
   min-width: 0;
@@ -464,6 +483,38 @@ body {
  * the same shape (name · platform · meta · running · toggle · destroy), so
  * they share one component rather than two near-identical lists.
  */
+
+/* A platform's worth of devices. Ten of them is a scrollable block rather than
+   a panel that grows until the port table has nowhere left to go. */
+.panel--devices .panel__body {
+  max-block-size: 40vh;
+  overflow-y: auto;
+}
+
+.devices__group + .devices__group {
+  margin-block-start: var(--space-sm);
+}
+
+.devices__platform {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-xs);
+  margin: 0 0 var(--space-2xs);
+  font-family: var(--font-body);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.devices__platform-count {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
 
 .devices {
   display: grid;
@@ -867,6 +918,23 @@ body {
   color: var(--color-accent);
 }
 
+/* The port number, which opens http://localhost:<port>. Styled as the text it
+   already was: the row is dense enough without a second underlined link. */
+.port__link {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .port__link:hover {
+    text-decoration: underline;
+  }
+}
+
 /* "+2" — this process holds two more ports; the title lists them all. */
 .port__more {
   padding: 0 var(--space-3xs);
@@ -909,6 +977,57 @@ body {
   font-family: var(--font-mono);
   font-size: var(--text-xs);
   color: var(--color-muted);
+}
+
+/* The addresses a phone on the same Wi-Fi can hit. Selectable for the same
+   reason as the toolbar chip, and outside the row's open-panel button because
+   text inside a button cannot be selected at all. */
+.port__lan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2xs);
+  margin-block-start: var(--space-3xs);
+}
+
+.port__url {
+  border: 0;
+  cursor: pointer;
+  padding: 0 var(--space-3xs);
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-accent);
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Process-wide load. No GPU twin: no platform reports a per-process share of
+   it without a vendor tool, and a column of zeroes would read as "idle". */
+.port__cpu {
+  flex: 0 0 3rem;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--color-ink-2);
+}
+
+/* NVIDIA only: the column is absent on every other machine rather than showing
+   a zero nobody measured. */
+.port__gpu {
+  flex: 0 0 3.5rem;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--color-ink-2);
+}
+
+.port__disk {
+  flex: 0 0 4.5rem;
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: end;
+  color: var(--color-ink-2);
 }
 
 .port__mem {
@@ -966,6 +1085,9 @@ body {
   transition: color var(--dur-base) var(--ease-out);
 }
 
+.port__cpu .sort,
+.port__gpu .sort,
+.port__disk .sort,
 .port__mem .sort,
 .port__pid .sort {
   /* end-aligned columns keep their header flush with the numbers */
@@ -1007,7 +1129,10 @@ body {
    * Memory and PID are diagnostics; the checkbox stays because selection has
    * no other affordance. */
   .port__pid,
-  .port__mem {
+  .port__mem,
+  .port__cpu,
+  .port__gpu,
+  .port__disk {
     display: none;
   }
 
@@ -1274,6 +1399,10 @@ body {
 
 .port__open {
   display: block;
+  /* Fills its cell. A button shrink-wraps by default, and the name and detail
+     inside it lean on the cell's width for their ellipsis. */
+  inline-size: 100%;
+  min-width: 0;
   border: 0;
   padding: 0;
   background: none;
@@ -1472,6 +1601,11 @@ body {
 .port__mem,
 .port__pid,
 .port__detail,
+.port__url,
+.port__cpu,
+.port__gpu,
+.port__disk,
+.toolbar__ip,
 .event__port,
 .event__pid,
 .event__at,

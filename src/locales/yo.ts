@@ -18,6 +18,10 @@ export const yo: Strings = {
   "toolbar.autostartOn": "portiye máa bẹ̀rẹ̀ pẹ̀lú ìjókòó rẹ",
   "toolbar.autostartOff": "portiye kì í bẹ̀rẹ̀ pẹ̀lú ìjókòó rẹ",
 
+  "lan.address": "Àdírẹ́sì ẹ̀rọ yìí lórí nẹ́tíwọ̀kì",
+  "lan.reachable": "A lè dé ọ̀dọ̀ rẹ̀ láti àwọn ẹ̀rọ mìíràn lórí nẹ́tíwọ̀kì yìí",
+  "lan.open": "Ṣí {url}",
+
   "banner.dismiss": "Pa",
   "banner.dismissError": "Pa àṣìṣe náà",
   "banner.reveal": "Fihàn nínú fódà",

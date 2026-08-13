@@ -18,6 +18,10 @@ export const ar: Strings = {
   "toolbar.autostartOn": "يبدأ portiye مع جلستك",
   "toolbar.autostartOff": "لا يبدأ portiye مع جلستك",
 
+  "lan.address": "عنوان هذا الجهاز على الشبكة",
+  "lan.reachable": "يمكن الوصول إليه من الأجهزة الأخرى على هذه الشبكة",
+  "lan.open": "فتح {url}",
+
   "banner.dismiss": "إغلاق",
   "banner.dismissError": "إغلاق الخطأ",
   "banner.reveal": "إظهار في المجلد",

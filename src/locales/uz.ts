@@ -18,6 +18,10 @@ export const uz: Strings = {
   "toolbar.autostartOn": "portiye seansingiz bilan birga ishga tushadi",
   "toolbar.autostartOff": "portiye seansingiz bilan birga ishga tushmaydi",
 
+  "lan.address": "Ushbu kompyuterning tarmoqdagi manzili",
+  "lan.reachable": "Shu tarmoqdagi boshqa qurilmalardan ochiladi",
+  "lan.open": "{url} manzilini ochish",
+
   "banner.dismiss": "Yopish",
   "banner.dismissError": "Xatoni yopish",
   "banner.reveal": "Papkada ko‘rsatish",

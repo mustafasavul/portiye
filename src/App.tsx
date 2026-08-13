@@ -43,6 +43,8 @@ export default function App() {
   const [runtimes, setRuntimes] = useState<RuntimeItem[]>([]);
   const [ports, setPorts] = useState<PortEntry[]>([]);
   const [system, setSystem] = useState<SystemStats | null>(null);
+  /** This machine's LAN address, or null when it is on no network. */
+  const [lanIp, setLanIp] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [sort, setSort] = useState<Sort>({ key: "port", dir: 1 });
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -102,6 +104,10 @@ export default function App() {
     if (a.status === "fulfilled") setAvds(a.value);
     if (s.status === "fulfilled") setSims(s.value);
     if (r.status === "fulfilled") setRuntimes(r.value);
+
+    // Same slow cadence: this machine's address only changes when the network
+    // does, and it is a routing-table lookup rather than a subprocess.
+    setLanIp(await invoke<string | null>("local_ip").catch(() => null));
 
     // A lister that fails is a real fault worth showing — but it clears itself
     // on the next good pass rather than waiting for an unrelated port tick.
@@ -252,18 +258,30 @@ export default function App() {
     const procs = new Map<number, Proc & { family: number }>();
     for (const p of rows) {
       const existing = procs.get(p.pid);
-      if (existing) existing.ports.push(p.port);
-      else
+      if (existing) {
+        existing.ports.push(p.port);
+        if (p.lan) existing.lanPorts.push(p.port);
+      } else
         procs.set(p.pid, {
           pid: p.pid,
           name: p.name,
           detail: p.detail,
           memory: p.memory,
+          // Every row for one pid carries the same process-wide figures, so
+          // these are read once rather than summed over its ports.
+          cpu: p.cpu,
+          disk: p.disk,
+          gpu: p.gpu,
+          gpuMemory: p.gpu_memory,
           ports: [p.port],
+          lanPorts: p.lan ? [p.port] : [],
           family: p.family,
         });
     }
-    for (const proc of procs.values()) proc.ports.sort((a, b) => a - b);
+    for (const proc of procs.values()) {
+      proc.ports.sort((a, b) => a - b);
+      proc.lanPorts.sort((a, b) => a - b);
+    }
 
     // Collect members first, then pick the root — deciding the root while
     // iterating drops whichever member arrives before it.
@@ -293,6 +311,17 @@ export default function App() {
       switch (sort.key) {
         case "memory":
           return all.reduce((sum, p) => sum + p.memory, 0);
+        case "cpu":
+          return all.reduce((sum, p) => sum + p.cpu, 0);
+        case "disk":
+          return all.reduce((sum, p) => sum + p.disk, 0);
+        // Where nothing reports an SM share the column is video memory, and
+        // so is the order it sorts in.
+        case "gpu":
+          return (
+            all.reduce((sum, p) => sum + (p.gpu ?? 0), 0) ||
+            all.reduce((sum, p) => sum + p.gpuMemory, 0)
+          );
         case "pid":
           return f.root.pid;
         // How many processes belong together — a lone process weighs 1.
@@ -311,6 +340,15 @@ export default function App() {
       return delta || lowestPort(a) - lowestPort(b);
     });
   }, [ports, filter, sort]);
+
+  /**
+   * NVIDIA-only, so the column exists on the machines that have a sampler and
+   * nowhere else — an empty GPU column would read as "nothing is using it".
+   */
+  const showGpu = useMemo(
+    () => ports.some((p) => p.gpu !== null || p.gpu_memory > 0),
+    [ports],
+  );
 
   const shownProcs = useMemo(
     () => families.flatMap((f) => [f.root, ...f.children]),
@@ -539,6 +577,7 @@ export default function App() {
         onFormat={setFormat}
         onExport={exportSnapshot}
         canStreamLogs={canStreamLogs}
+        lanIp={lanIp}
       />
 
       {error && (
@@ -712,6 +751,8 @@ export default function App() {
                 onToggleSelect={toggleSelect}
                 onToggleAll={toggleAll}
                 memoryWarn={memoryWarnMb * 1_048_576}
+                lanIp={lanIp}
+                showGpu={showGpu}
                 openPid={detailPid}
                 onOpen={(p) => setDetailPid((cur) => (cur === p.pid ? null : p.pid))}
                 busy={busy}
@@ -732,6 +773,10 @@ export default function App() {
       {detailPid !== null && (
         <ProcessDetail
           pid={detailPid}
+          lanIp={lanIp}
+          lanPorts={
+            shownProcs.find((p) => p.pid === detailPid)?.lanPorts ?? []
+          }
           onClose={() => setDetailPid(null)}
           onKill={() => {
             const proc = shownProcs.find((p) => p.pid === detailPid);

@@ -18,6 +18,10 @@ export const he: Strings = {
   "toolbar.autostartOn": "portiye עולה יחד עם ההתחברות שלך",
   "toolbar.autostartOff": "portiye לא עולה עם ההתחברות שלך",
 
+  "lan.address": "הכתובת של המחשב הזה ברשת",
+  "lan.reachable": "נגיש ממכשירים אחרים ברשת הזו",
+  "lan.open": "פתח את {url}",
+
   "banner.dismiss": "סגירה",
   "banner.dismissError": "סגירת השגיאה",
   "banner.reveal": "הצגה בתיקייה",

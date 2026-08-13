@@ -30,6 +30,7 @@ pub fn run() {
             procinfo::process_detail,
             logs::start_logs,
             logs::stop_logs,
+            ports::local_ip,
             ports::kill_process,
             ports::kill_processes,
             ports::kill_processes_elevated,

@@ -18,6 +18,10 @@ export const id: Strings = {
   "toolbar.autostartOn": "portiye ikut berjalan saat Anda masuk",
   "toolbar.autostartOff": "portiye tidak ikut berjalan saat Anda masuk",
 
+  "lan.address": "Alamat mesin ini di jaringan",
+  "lan.reachable": "Dapat diakses dari perangkat lain di jaringan ini",
+  "lan.open": "Buka {url}",
+
   "banner.dismiss": "Tutup",
   "banner.dismissError": "Tutup galat",
   "banner.reveal": "Tampilkan di folder",

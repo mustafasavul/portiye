@@ -22,6 +22,10 @@ export const en = {
   "toolbar.autostartOn": "portiye starts with your session",
   "toolbar.autostartOff": "portiye does not start with your session",
 
+  "lan.address": "This machine's address on the network",
+  "lan.reachable": "Reachable from other devices on this network",
+  "lan.open": "Open {url}",
+
   "banner.dismiss": "Dismiss",
   "banner.dismissError": "Dismiss error",
   "banner.reveal": "Reveal",

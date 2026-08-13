@@ -18,6 +18,10 @@ export const ru: Strings = {
   "toolbar.autostartOn": "portiye запускается вместе с сеансом",
   "toolbar.autostartOff": "portiye не запускается вместе с сеансом",
 
+  "lan.address": "Адрес этого компьютера в сети",
+  "lan.reachable": "Доступно с других устройств в этой сети",
+  "lan.open": "Открыть {url}",
+
   "banner.dismiss": "Закрыть",
   "banner.dismissError": "Закрыть ошибку",
   "banner.reveal": "Показать в папке",

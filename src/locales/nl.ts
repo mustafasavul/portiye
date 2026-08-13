@@ -18,6 +18,10 @@ export const nl: Strings = {
   "toolbar.autostartOn": "portiye start mee met je sessie",
   "toolbar.autostartOff": "portiye start niet mee met je sessie",
 
+  "lan.address": "Adres van deze machine op het netwerk",
+  "lan.reachable": "Bereikbaar vanaf andere apparaten in dit netwerk",
+  "lan.open": "{url} openen",
+
   "banner.dismiss": "Sluiten",
   "banner.dismissError": "Fout sluiten",
   "banner.reveal": "Toon in map",

@@ -18,6 +18,10 @@ export const ur: Strings = {
   "toolbar.autostartOn": "portiye آپ کے سیشن کے ساتھ چل پڑتا ہے",
   "toolbar.autostartOff": "portiye آپ کے سیشن کے ساتھ نہیں چلتا",
 
+  "lan.address": "اس مشین کا نیٹ ورک پتہ",
+  "lan.reachable": "اس نیٹ ورک کے دوسرے آلات سے قابل رسائی",
+  "lan.open": "{url} کھولیں",
+
   "banner.dismiss": "بند کریں",
   "banner.dismissError": "خرابی بند کریں",
   "banner.reveal": "فولڈر میں دکھائیں",

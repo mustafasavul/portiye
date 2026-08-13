@@ -18,6 +18,10 @@ export const fa: Strings = {
   "toolbar.autostartOn": "portiye همراه نشست شما اجرا می‌شود",
   "toolbar.autostartOff": "portiye همراه نشست شما اجرا نمی‌شود",
 
+  "lan.address": "نشانی این دستگاه در شبکه",
+  "lan.reachable": "از دستگاه‌های دیگر این شبکه در دسترس است",
+  "lan.open": "باز کردن {url}",
+
   "banner.dismiss": "بستن",
   "banner.dismissError": "بستن خطا",
   "banner.reveal": "نمایش در پوشه",

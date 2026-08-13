@@ -18,6 +18,10 @@ export const ha: Strings = {
   "toolbar.autostartOn": "portiye yana farawa tare da zamanka",
   "toolbar.autostartOff": "portiye ba ya farawa tare da zamanka",
 
+  "lan.address": "Adireshin wannan na'urar a hanyar sadarwa",
+  "lan.reachable": "Ana iya kaiwa gare shi daga sauran na'urori a wannan hanyar sadarwa",
+  "lan.open": "Buɗe {url}",
+
   "banner.dismiss": "Rufe",
   "banner.dismissError": "Rufe kuskure",
   "banner.reveal": "Nuna a cikin babban fayil",

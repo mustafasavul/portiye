@@ -18,6 +18,10 @@ export const am: Strings = {
   "toolbar.autostartOn": "portiye ከክፍለ ጊዜህ ጋር አብሮ ይጀምራል",
   "toolbar.autostartOff": "portiye ከክፍለ ጊዜህ ጋር አብሮ አይጀምርም",
 
+  "lan.address": "የዚህ ማሽን የአውታረ መረብ አድራሻ",
+  "lan.reachable": "በዚህ አውታረ መረብ ላይ ካሉ ሌሎች መሣሪያዎች ይደረሳል",
+  "lan.open": "{url} ክፈት",
+
   "banner.dismiss": "ዝጋ",
   "banner.dismissError": "ስህተቱን ዝጋ",
   "banner.reveal": "በአቃፊ ውስጥ አሳይ",

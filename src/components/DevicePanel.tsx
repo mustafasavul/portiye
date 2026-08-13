@@ -21,8 +21,23 @@ export function DevicePanel({
   const t = useT();
   const running = devices.filter((d) => d.running).length;
 
+  // Grouped by platform, because ten devices in one grid is a wall: an iPhone,
+  // an iPad and four simulators read as one pile unless Apple's are together
+  // and Android's are together. Insertion order, so a machine that only has
+  // one platform sees exactly what it saw before — with the subhead dropped,
+  // since a single group's heading only repeats the panel title.
+  const groups: [string, Device[]][] = [];
+  for (const d of devices) {
+    const group = groups.find(([platform]) => platform === d.platform);
+    if (group) group[1].push(d);
+    else groups.push([d.platform, [d]]);
+  }
+  // Alphabetical, not first-seen: the list is sorted running-first, so a group
+  // would otherwise jump position the moment a device boots.
+  groups.sort((a, b) => a[0].localeCompare(b[0]));
+
   return (
-    <section className="panel">
+    <section className="panel panel--devices">
       <div className="panel__head">
         <h2 className="panel__title">{title}</h2>
         <span className="panel__count">
@@ -33,26 +48,41 @@ export function DevicePanel({
         {devices.length === 0 ? (
           <p className="empty">{empty}</p>
         ) : (
-          <ul className="devices">
-            {devices.map((d) => (
-              <DeviceRow
-                key={d.id}
-                device={d}
-                busy={busy === d.id}
-                onToggle={() => d.toggle && run(d.id, d.toggle)}
-                onRestart={() => d.restart && run(d.id, d.restart)}
-                onReset={async () => {
-                  if (!d.reset) return;
-                  const ok = await ask({
-                    title: t("device.resetTitle", { name: d.name }),
-                    warning: d.resetWarning,
-                    confirmLabel: d.resetLabel,
-                  });
-                  if (ok) run(d.id, d.reset);
-                }}
-              />
-            ))}
-          </ul>
+          groups.map(([platform, members]) => (
+            <div className="devices__group" key={platform}>
+              {groups.length > 1 && (
+                <h3 className="devices__platform">
+                  {platform}
+                  <span className="devices__platform-count">
+                    {t("devices.count", {
+                      running: members.filter((d) => d.running).length,
+                      total: members.length,
+                    })}
+                  </span>
+                </h3>
+              )}
+              <ul className="devices">
+                {members.map((d) => (
+                  <DeviceRow
+                    key={d.id}
+                    device={d}
+                    busy={busy === d.id}
+                    onToggle={() => d.toggle && run(d.id, d.toggle)}
+                    onRestart={() => d.restart && run(d.id, d.restart)}
+                    onReset={async () => {
+                      if (!d.reset) return;
+                      const ok = await ask({
+                        title: t("device.resetTitle", { name: d.name }),
+                        warning: d.resetWarning,
+                        confirmLabel: d.resetLabel,
+                      });
+                      if (ok) run(d.id, d.reset);
+                    }}
+                  />
+                ))}
+              </ul>
+            </div>
+          ))
         )}
       </div>
     </section>

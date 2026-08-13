@@ -18,6 +18,10 @@ export const tr: Strings = {
   "toolbar.autostartOn": "portiye oturumunuzla birlikte başlar",
   "toolbar.autostartOff": "portiye oturumunuzla birlikte başlamaz",
 
+  "lan.address": "Bu makinenin ağdaki adresi",
+  "lan.reachable": "Bu ağdaki diğer cihazlardan erişilebilir",
+  "lan.open": "{url} adresini aç",
+
   "banner.dismiss": "Kapat",
   "banner.dismissError": "Hatayı kapat",
   "banner.reveal": "Klasörde göster",

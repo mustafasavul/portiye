@@ -19,6 +19,10 @@ export const pt: Strings = {
   "toolbar.autostartOn": "o portiye abre junto com a sua sessão",
   "toolbar.autostartOff": "o portiye não abre junto com a sua sessão",
 
+  "lan.address": "Endereço desta máquina na rede",
+  "lan.reachable": "Acessível a partir de outros dispositivos desta rede",
+  "lan.open": "Abrir {url}",
+
   "banner.dismiss": "Fechar",
   "banner.dismissError": "Fechar erro",
   "banner.reveal": "Mostrar na pasta",

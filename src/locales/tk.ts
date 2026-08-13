@@ -18,6 +18,10 @@ export const tk: Strings = {
   "toolbar.autostartOn": "portiye seansyň bilen bile işe girýär",
   "toolbar.autostartOff": "portiye seansyň bilen bile işe girmeýär",
 
+  "lan.address": "Bu enjamyň tordaky salgysy",
+  "lan.reachable": "Bu tordaky beýleki enjamlardan elýeterli",
+  "lan.open": "{url} açmak",
+
   "banner.dismiss": "Ýap",
   "banner.dismissError": "Ýalňyşlygy ýap",
   "banner.reveal": "Bukjada görkez",

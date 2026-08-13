@@ -18,6 +18,10 @@ export const kk: Strings = {
   "toolbar.autostartOn": "portiye сеансыңызбен бірге іске қосылады",
   "toolbar.autostartOff": "portiye сеансыңызбен бірге іске қосылмайды",
 
+  "lan.address": "Осы компьютердің желідегі мекенжайы",
+  "lan.reachable": "Осы желідегі басқа құрылғылардан қолжетімді",
+  "lan.open": "{url} ашу",
+
   "banner.dismiss": "Жабу",
   "banner.dismissError": "Қатені жабу",
   "banner.reveal": "Қалтада көрсету",

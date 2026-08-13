@@ -18,6 +18,10 @@ export const zh: Strings = {
   "toolbar.autostartOn": "portiye 会随登录一起启动",
   "toolbar.autostartOff": "portiye 不会随登录启动",
 
+  "lan.address": "本机在网络中的地址",
+  "lan.reachable": "同一网络中的其他设备可以访问",
+  "lan.open": "打开 {url}",
+
   "banner.dismiss": "关闭",
   "banner.dismissError": "关闭错误",
   "banner.reveal": "在文件夹中显示",

@@ -21,6 +21,13 @@ pub struct ProcessDetail {
     pub user: String,
     pub memory: u64,
     pub cpu: f32,
+    /// Disk bytes per second, read + written, measured over the same short
+    /// second sample that makes `cpu` a rate.
+    pub disk: u64,
+    /// Percent of the GPU's SMs, and the video memory held, where an NVIDIA
+    /// sampler is running. `None` / 0 everywhere else.
+    pub gpu: Option<f32>,
+    pub gpu_memory: u64,
     /// Seconds since the process started.
     pub uptime: u64,
     /// Root-to-parent chain, outermost first.
@@ -153,6 +160,13 @@ pub fn process_detail(pid: u32) -> Result<ProcessDetail, String> {
             .unwrap_or_default(),
         memory: proc.memory(),
         cpu: proc.cpu_usage(),
+        gpu: crate::gpu::per_process(pid).and_then(|g| g.sm),
+        gpu_memory: crate::gpu::per_process(pid).map(|g| g.memory).unwrap_or(0),
+        disk: {
+            let d = proc.disk_usage();
+            let secs = sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.as_secs_f64();
+            ((d.read_bytes + d.written_bytes) as f64 / secs) as u64
+        },
         uptime: proc.run_time(),
         ancestors,
         children,

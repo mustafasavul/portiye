@@ -18,6 +18,10 @@ export const fil: Strings = {
   "toolbar.autostartOn": "Bumubukas ang portiye kasabay ng iyong session",
   "toolbar.autostartOff": "Hindi bumubukas ang portiye kasabay ng iyong session",
 
+  "lan.address": "Address ng makinang ito sa network",
+  "lan.reachable": "Maaabot mula sa ibang device sa network na ito",
+  "lan.open": "Buksan ang {url}",
+
   "banner.dismiss": "Isara",
   "banner.dismissError": "Isara ang error",
   "banner.reveal": "Ipakita sa folder",
