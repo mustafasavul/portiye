@@ -3,6 +3,7 @@ mod export;
 mod gpu;
 mod i18n;
 mod logs;
+mod menu;
 mod ports;
 mod procinfo;
 mod runtimes;
@@ -49,17 +50,25 @@ pub fn run() {
             runtimes::list_runtimes,
             runtimes::runtime_action,
             i18n::set_locale,
+            gpu::set_gpu_enabled,
+            tray::set_tray_options,
+            watch::set_disk_enabled,
         ])
         .setup(|app| {
+            menu::init(app.handle())?;
             tray::init(app.handle())?;
             watch::start(app.handle());
             Ok(())
         })
-        // Closing the window keeps the tray running instead of quitting.
+        // Closing the window keeps the tray running instead of quitting — but
+        // only while there is a tray to come back through. With the icon hidden
+        // the same behaviour would leave a running app with no way to reach it.
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                api.prevent_close();
-                let _ = window.hide();
+                if tray::tray_visible() {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
             }
         })
         .run(tauri::generate_context!())

@@ -17,7 +17,9 @@ export function PortTable({
   onOpen,
   openPid,
   lanIp,
+  showCpu,
   showGpu,
+  showDisk,
 }: {
   families: Family[];
   sort: Sort;
@@ -34,9 +36,12 @@ export function PortTable({
   /** This machine's LAN address, or null when it is on no network — then the
    *  reachable-from-a-phone chips have no address to print and are dropped. */
   lanIp: string | null;
-  /** True only where an NVIDIA sampler is reporting; elsewhere the column is
-   *  dropped rather than filled with zeroes. */
+  /** Set in Settings. A column nobody asked for is a column of noise. */
+  showCpu: boolean;
+  /** True only where the setting is on *and* an NVIDIA sampler is reporting;
+   *  elsewhere the column is dropped rather than filled with zeroes. */
   showGpu: boolean;
+  showDisk: boolean;
 }) {
   const t = useT();
   const rows = families.flatMap((f) =>
@@ -72,17 +77,21 @@ export function PortTable({
         </span>
         {/* The gauges above already say "CPU" and "Disk" in every language —
             the same keys serve as column headers rather than new strings. */}
-        <span className="port__cpu">
-          <SortHead sort={sort} onSort={onSort} k="cpu" label="system.cpu" />
-        </span>
+        {showCpu && (
+          <span className="port__cpu">
+            <SortHead sort={sort} onSort={onSort} k="cpu" label="system.cpu" />
+          </span>
+        )}
         {showGpu && (
           <span className="port__gpu">
             <SortHead sort={sort} onSort={onSort} k="gpu" label="system.gpu" />
           </span>
         )}
-        <span className="port__disk">
-          <SortHead sort={sort} onSort={onSort} k="disk" label="system.disk" />
-        </span>
+        {showDisk && (
+          <span className="port__disk">
+            <SortHead sort={sort} onSort={onSort} k="disk" label="system.disk" />
+          </span>
+        )}
         <span className="port__mem">
           <SortHead sort={sort} onSort={onSort} k="memory" label="table.memory" />
         </span>
@@ -111,7 +120,9 @@ export function PortTable({
             busy={busy === `port:${proc.pid}`}
             onKill={() => onKill(proc)}
             lanIp={lanIp}
+            showCpu={showCpu}
             showGpu={showGpu}
+            showDisk={showDisk}
           />
         ))}
       </ul>
@@ -134,7 +145,9 @@ function ProcRow({
   busy,
   onKill,
   lanIp,
+  showCpu,
   showGpu,
+  showDisk,
 }: {
   proc: Proc;
   child: boolean;
@@ -146,7 +159,9 @@ function ProcRow({
   busy: boolean;
   onKill: () => void;
   lanIp: string | null;
+  showCpu: boolean;
   showGpu: boolean;
+  showDisk: boolean;
 }) {
   const t = useT();
   const [first, ...rest] = proc.ports;
@@ -213,7 +228,7 @@ function ProcRow({
         </button>
         <LanChips ip={lanIp} ports={proc.lanPorts} />
       </div>
-      <span className="port__cpu">{Math.round(proc.cpu)}%</span>
+      {showCpu && <span className="port__cpu">{Math.round(proc.cpu)}%</span>}
       {/* The SM share when the sampler reports one, otherwise the video memory
           it holds — `--query-compute-apps` knows the second and not the first. */}
       {showGpu && (
@@ -225,7 +240,7 @@ function ProcRow({
               : "—"}
         </span>
       )}
-      <span className="port__disk">{rate(proc.disk)}</span>
+      {showDisk && <span className="port__disk">{rate(proc.disk)}</span>}
       <span className="port__mem">
         {mb(proc.memory)}
         {/* The threshold is a user setting, so the marker explains itself

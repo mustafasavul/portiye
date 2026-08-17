@@ -1,4 +1,5 @@
 import { useT } from "../i18n";
+import { SettingsButton } from "./SettingsButton";
 import type { Ask } from "../Confirm";
 import type { Device } from "../types";
 
@@ -10,6 +11,7 @@ export function DevicePanel({
   run,
   ask,
   empty,
+  onSettings,
 }: {
   title: string;
   devices: Device[];
@@ -17,6 +19,8 @@ export function DevicePanel({
   run: (id: string, action: () => Promise<void>) => void;
   ask: (a: Ask) => Promise<boolean>;
   empty?: string;
+  /** Opens the settings view, where this panel can be switched off. */
+  onSettings: () => void;
 }) {
   const t = useT();
   const running = devices.filter((d) => d.running).length;
@@ -43,6 +47,7 @@ export function DevicePanel({
         <span className="panel__count">
           {t("devices.count", { running, total: devices.length })}
         </span>
+        <SettingsButton onClick={onSettings} />
       </div>
       <div className="panel__body">
         {devices.length === 0 ? (

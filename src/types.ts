@@ -156,3 +156,40 @@ export const THRESHOLDS = [100, 250, 500, 1000, 2000];
 
 export const thresholdLabel = (mb: number) =>
   mb >= 1000 ? `${mb / 1000} GB` : `${mb} MB`;
+
+/**
+ * What the window draws. One object rather than six booleans threaded through
+ * three components — they are set together, in one place, and read together.
+ */
+export type Panels = {
+  devices: boolean;
+  system: boolean;
+  cpu: boolean;
+  /** Not display-only: off, the Rust side stops measuring the GPU. */
+  gpu: boolean;
+  disk: boolean;
+};
+
+/** What the menu-bar / system-tray icon shows, and whether it is there. */
+export type TrayOptions = {
+  visible: boolean;
+  /** The one-line CPU · GPU · RAM · DISK readout at the top of the menu. */
+  stats: boolean;
+  ports: boolean;
+  devices: boolean;
+};
+
+export const DEFAULT_PANELS: Panels = {
+  devices: true,
+  system: true,
+  cpu: true,
+  gpu: true,
+  disk: true,
+};
+
+export const DEFAULT_TRAY: TrayOptions = {
+  visible: true,
+  stats: true,
+  ports: true,
+  devices: true,
+};

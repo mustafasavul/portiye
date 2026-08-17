@@ -35,6 +35,9 @@ const EN: Table = &[
         "Windows will show a User Account Control prompt.",
     ),
     ("elevate.other", "Your desktop will ask for authentication."),
+    ("menu.home", "portiye on GitHub"),
+    ("menu.issue", "Report an issue"),
+    ("menu.releases", "Release notes"),
 ];
 
 const TR: Table = &[
@@ -54,6 +57,9 @@ const TR: Table = &[
         "Windows bir Kullanıcı Hesabı Denetimi istemi gösterecek.",
     ),
     ("elevate.other", "Masaüstünüz kimlik doğrulaması isteyecek."),
+    ("menu.home", "GitHub'da portiye"),
+    ("menu.issue", "Sorun bildir"),
+    ("menu.releases", "Sürüm notları"),
 ];
 
 const ES: Table = &[
@@ -73,6 +79,9 @@ const ES: Table = &[
         "Windows mostrará un aviso de Control de cuentas de usuario.",
     ),
     ("elevate.other", "Tu escritorio pedirá autenticación."),
+    ("menu.home", "portiye en GitHub"),
+    ("menu.issue", "Informar de un problema"),
+    ("menu.releases", "Notas de la versión"),
 ];
 
 const PT: Table = &[
@@ -95,6 +104,9 @@ const PT: Table = &[
         "elevate.other",
         "Sua área de trabalho vai pedir autenticação.",
     ),
+    ("menu.home", "portiye no GitHub"),
+    ("menu.issue", "Relatar um problema"),
+    ("menu.releases", "Notas de versão"),
 ];
 
 const DE: Table = &[
@@ -117,6 +129,9 @@ const DE: Table = &[
         "elevate.other",
         "Deine Desktop-Umgebung fragt nach einer Authentifizierung.",
     ),
+    ("menu.home", "portiye auf GitHub"),
+    ("menu.issue", "Problem melden"),
+    ("menu.releases", "Versionshinweise"),
 ];
 
 const NL: Table = &[
@@ -136,6 +151,9 @@ const NL: Table = &[
         "Windows toont een Gebruikersaccountbeheer-melding.",
     ),
     ("elevate.other", "Je bureaublad vraagt om authenticatie."),
+    ("menu.home", "portiye op GitHub"),
+    ("menu.issue", "Probleem melden"),
+    ("menu.releases", "Release-opmerkingen"),
 ];
 
 const RU: Table = &[
@@ -158,6 +176,9 @@ const RU: Table = &[
         "elevate.other",
         "Ваша рабочая среда запросит аутентификацию.",
     ),
+    ("menu.home", "portiye на GitHub"),
+    ("menu.issue", "Сообщить о проблеме"),
+    ("menu.releases", "Заметки о выпуске"),
 ];
 
 const ZH: Table = &[
@@ -174,6 +195,9 @@ const ZH: Table = &[
     ("elevate.macos", "macOS 会要求输入你的密码。"),
     ("elevate.windows", "Windows 会弹出用户账户控制提示。"),
     ("elevate.other", "你的桌面环境会要求进行身份验证。"),
+    ("menu.home", "GitHub 上的 portiye"),
+    ("menu.issue", "报告问题"),
+    ("menu.releases", "版本说明"),
 ];
 
 const HI: Table = &[
@@ -193,6 +217,9 @@ const HI: Table = &[
         "Windows एक User Account Control संकेत दिखाएगा।",
     ),
     ("elevate.other", "आपका डेस्कटॉप प्रमाणीकरण माँगेगा।"),
+    ("menu.home", "GitHub पर portiye"),
+    ("menu.issue", "समस्या दर्ज करें"),
+    ("menu.releases", "रिलीज़ नोट्स"),
 ];
 
 const BN: Table = &[
@@ -212,6 +239,9 @@ const BN: Table = &[
         "Windows একটি User Account Control বার্তা দেখাবে।",
     ),
     ("elevate.other", "আপনার ডেস্কটপ পরিচয় যাচাই চাইবে।"),
+    ("menu.home", "GitHub-এ portiye"),
+    ("menu.issue", "সমস্যা জানান"),
+    ("menu.releases", "রিলিজ নোট"),
 ];
 
 const UR: Table = &[
@@ -231,6 +261,9 @@ const UR: Table = &[
         "Windows ایک User Account Control پیغام دکھائے گا۔",
     ),
     ("elevate.other", "آپ کا ڈیسک ٹاپ تصدیق مانگے گا۔"),
+    ("menu.home", "GitHub پر portiye"),
+    ("menu.issue", "مسئلہ رپورٹ کریں"),
+    ("menu.releases", "ریلیز نوٹس"),
 ];
 
 const AR: Table = &[
@@ -250,6 +283,9 @@ const AR: Table = &[
         "سيعرض Windows مطالبة التحكم في حساب المستخدم.",
     ),
     ("elevate.other", "سيطلب سطح المكتب لديك مصادقة."),
+    ("menu.home", "portiye على GitHub"),
+    ("menu.issue", "الإبلاغ عن مشكلة"),
+    ("menu.releases", "ملاحظات الإصدار"),
 ];
 
 const FA: Table = &[
@@ -269,6 +305,9 @@ const FA: Table = &[
         "Windows یک پیام User Account Control نشان می‌دهد.",
     ),
     ("elevate.other", "میزکار شما درخواست احراز هویت می‌کند."),
+    ("menu.home", "portiye در گیت‌هاب"),
+    ("menu.issue", "گزارش مشکل"),
+    ("menu.releases", "یادداشت‌های انتشار"),
 ];
 
 const HE: Table = &[
@@ -285,6 +324,9 @@ const HE: Table = &[
     ("elevate.macos", "macOS יבקש את הסיסמה שלך."),
     ("elevate.windows", "Windows יציג בקשת בקרת חשבון משתמש."),
     ("elevate.other", "שולחן העבודה שלך יבקש אימות."),
+    ("menu.home", "portiye ב-GitHub"),
+    ("menu.issue", "דיווח על תקלה"),
+    ("menu.releases", "הערות גרסה"),
 ];
 
 const ID: Table = &[
@@ -304,6 +346,9 @@ const ID: Table = &[
         "Windows akan menampilkan permintaan User Account Control.",
     ),
     ("elevate.other", "Desktop Anda akan meminta autentikasi."),
+    ("menu.home", "portiye di GitHub"),
+    ("menu.issue", "Laporkan masalah"),
+    ("menu.releases", "Catatan rilis"),
 ];
 
 const MS: Table = &[
@@ -323,6 +368,9 @@ const MS: Table = &[
         "Windows akan menunjukkan gesaan User Account Control.",
     ),
     ("elevate.other", "Desktop anda akan meminta pengesahan."),
+    ("menu.home", "portiye di GitHub"),
+    ("menu.issue", "Laporkan isu"),
+    ("menu.releases", "Nota keluaran"),
 ];
 
 const FIL: Table = &[
@@ -342,6 +390,9 @@ const FIL: Table = &[
         "Magpapakita ang Windows ng User Account Control prompt.",
     ),
     ("elevate.other", "Hihingi ng authentication ang desktop mo."),
+    ("menu.home", "portiye sa GitHub"),
+    ("menu.issue", "Mag-ulat ng isyu"),
+    ("menu.releases", "Mga tala sa release"),
 ];
 
 const VI: Table = &[
@@ -364,6 +415,9 @@ const VI: Table = &[
         "elevate.other",
         "Môi trường desktop của bạn sẽ yêu cầu xác thực.",
     ),
+    ("menu.home", "portiye trên GitHub"),
+    ("menu.issue", "Báo lỗi"),
+    ("menu.releases", "Ghi chú phát hành"),
 ];
 
 const TH: Table = &[
@@ -380,6 +434,9 @@ const TH: Table = &[
     ("elevate.macos", "macOS จะขอรหัสผ่านของคุณ"),
     ("elevate.windows", "Windows จะแสดงกล่อง User Account Control"),
     ("elevate.other", "เดสก์ท็อปของคุณจะขอการยืนยันตัวตน"),
+    ("menu.home", "portiye บน GitHub"),
+    ("menu.issue", "รายงานปัญหา"),
+    ("menu.releases", "บันทึกการเผยแพร่"),
 ];
 
 const KK: Table = &[
@@ -399,6 +456,9 @@ const KK: Table = &[
         "Windows Тіркелгіні басқару сұрауын көрсетеді.",
     ),
     ("elevate.other", "Жұмыс үстеліңіз аутентификация сұрайды."),
+    ("menu.home", "GitHub-тағы portiye"),
+    ("menu.issue", "Мәселе туралы хабарлау"),
+    ("menu.releases", "Шығарылым жазбалары"),
 ];
 
 const UZ: Table = &[
@@ -418,6 +478,9 @@ const UZ: Table = &[
         "Windows User Account Control so‘rovini ko‘rsatadi.",
     ),
     ("elevate.other", "Ish stolingiz autentifikatsiya so‘raydi."),
+    ("menu.home", "GitHub'da portiye"),
+    ("menu.issue", "Muammo haqida xabar berish"),
+    ("menu.releases", "Nashr eslatmalari"),
 ];
 
 const KY: Table = &[
@@ -437,6 +500,9 @@ const KY: Table = &[
         "Windows Каттоо эсебин көзөмөлдөө сурамын көрсөтөт.",
     ),
     ("elevate.other", "Иш столуңуз аутентификация сурайт."),
+    ("menu.home", "GitHub'дагы portiye"),
+    ("menu.issue", "Көйгөй жөнүндө кабарлоо"),
+    ("menu.releases", "Чыгарылыш эскертүүлөрү"),
 ];
 
 const TK: Table = &[
@@ -456,6 +522,9 @@ const TK: Table = &[
         "Windows Ulanyjy Hasabyna Gözegçilik soragyny görkezýär.",
     ),
     ("elevate.other", "Iş stoluňyz tassyklama soraýar."),
+    ("menu.home", "GitHub-da portiye"),
+    ("menu.issue", "Mesele barada habar ber"),
+    ("menu.releases", "Goýberiliş bellikleri"),
 ];
 
 const SW: Table = &[
@@ -475,6 +544,9 @@ const SW: Table = &[
         "Windows itaonyesha ombi la User Account Control.",
     ),
     ("elevate.other", "Eneo-kazi lako litaomba uthibitisho."),
+    ("menu.home", "portiye kwenye GitHub"),
+    ("menu.issue", "Ripoti tatizo"),
+    ("menu.releases", "Madokezo ya toleo"),
 ];
 
 const HA: Table = &[
@@ -494,6 +566,9 @@ const HA: Table = &[
         "Windows zai nuna saƙon User Account Control.",
     ),
     ("elevate.other", "Tebur ɗinka zai nemi tabbatarwa."),
+    ("menu.home", "portiye a GitHub"),
+    ("menu.issue", "Bayar da rahoton matsala"),
+    ("menu.releases", "Bayanan sakin"),
 ];
 
 const AM: Table = &[
@@ -510,6 +585,9 @@ const AM: Table = &[
     ("elevate.macos", "macOS የይለፍ ቃልህን ይጠይቃል።"),
     ("elevate.windows", "Windows የተጠቃሚ መለያ ቁጥጥር ጥያቄ ያሳያል።"),
     ("elevate.other", "ዴስክቶፕህ ማረጋገጫ ይጠይቃል።"),
+    ("menu.home", "portiye በGitHub"),
+    ("menu.issue", "ችግር አሳውቅ"),
+    ("menu.releases", "የልቀት ማስታወሻዎች"),
 ];
 
 const YO: Table = &[
@@ -529,6 +607,9 @@ const YO: Table = &[
         "Windows yóò fi ìbéèrè User Account Control hàn.",
     ),
     ("elevate.other", "Deskitọ́ọ̀pù rẹ yóò béèrè ìjẹ́rìísí."),
+    ("menu.home", "portiye lórí GitHub"),
+    ("menu.issue", "Jábọ̀ ìṣòro"),
+    ("menu.releases", "Àkọsílẹ̀ ìtúsílẹ̀"),
 ];
 
 const ZU: Table = &[
@@ -551,6 +632,9 @@ const ZU: Table = &[
         "elevate.other",
         "Ideskithophu yakho izocela ukuqinisekiswa.",
     ),
+    ("menu.home", "i-portiye ku-GitHub"),
+    ("menu.issue", "Bika inkinga"),
+    ("menu.releases", "Amanothi okukhishwa"),
 ];
 
 /// Every locale the tray speaks, in the same order as the window's picker.
@@ -612,6 +696,12 @@ pub fn t(key: &str) -> &'static str {
 pub fn set_locale<R: tauri::Runtime>(app: tauri::AppHandle<R>, locale: String) {
     set(&locale);
     crate::tray::refresh(&app);
+    // The Help items were built in whatever language was current at start-up;
+    // rebuilding the whole menu is what makes them follow the picker.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        let _ = crate::menu::init(&handle);
+    });
 }
 
 #[cfg(test)]

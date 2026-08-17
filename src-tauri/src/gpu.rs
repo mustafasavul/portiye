@@ -9,7 +9,8 @@
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader};
 use std::process::Stdio;
-use std::sync::{Mutex, OnceLock};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, Once, OnceLock};
 use std::time::{Duration, Instant};
 
 /// How often the streamed sampler reports, matching the port poll.
@@ -29,6 +30,29 @@ pub struct GpuProc {
     at: Instant,
 }
 
+/// Whether the GPU is measured at all.
+///
+/// Off is not "hide the row": nothing here shells out. No `ioreg` on the poll
+/// tick, no `nvidia-smi` child, and the streaming sampler ends its own process
+/// at the next line it reads. A machine with no GPU worth watching should not
+/// pay for one.
+static ENABLED: AtomicBool = AtomicBool::new(true);
+
+fn enabled() -> bool {
+    ENABLED.load(Ordering::Relaxed)
+}
+
+/// Pushed by the window from the settings page, and on every start — the
+/// setting lives in the webview's storage, so this is what the poller learns
+/// it from.
+#[tauri::command]
+pub fn set_gpu_enabled(enabled: bool) {
+    ENABLED.store(enabled, Ordering::Relaxed);
+    if enabled {
+        start_sampler();
+    }
+}
+
 fn table() -> &'static Mutex<HashMap<u32, GpuProc>> {
     static PROCS: OnceLock<Mutex<HashMap<u32, GpuProc>>> = OnceLock::new();
     PROCS.get_or_init(|| Mutex::new(HashMap::new()))
@@ -38,6 +62,9 @@ fn table() -> &'static Mutex<HashMap<u32, GpuProc>> {
 /// NVIDIA sampler running, the process is not using the GPU, or its last
 /// reading has gone stale.
 pub fn per_process(pid: u32) -> Option<GpuProc> {
+    if !enabled() {
+        return None;
+    }
     let procs = table().lock().ok()?;
     procs.get(&pid).copied().filter(|s| s.at.elapsed() < STALE)
 }
@@ -55,7 +82,14 @@ pub fn per_process(pid: u32) -> Option<GpuProc> {
 /// old for it) the thread falls back to polling `--query-compute-apps`, which
 /// is a fast one-shot and reports video memory but no SM share — that is a
 /// column with one number missing, not a fabricated one.
+/// Turning the setting off and on again must not leave two samplers streaming
+/// into the same table, so the thread is started at most once per run.
 pub fn start_sampler() {
+    static ONCE: Once = Once::new();
+    ONCE.call_once(start_sampler_thread);
+}
+
+fn start_sampler_thread() {
     std::thread::spawn(|| {
         // No NVIDIA tooling: nothing to sample, and nothing to retry either.
         if crate::ports::cmd("nvidia-smi")
@@ -68,7 +102,9 @@ pub fn start_sampler() {
         }
 
         loop {
-            if !stream_pmon() {
+            // Disabled means no subprocess at all — the thread parks rather
+            // than spawning one whose output would be thrown away.
+            if enabled() && !stream_pmon() {
                 poll_compute_apps();
             }
             // The driver can be reloaded under us; come back rather than
@@ -94,6 +130,12 @@ fn stream_pmon() -> bool {
     if let Some(out) = child.stdout.take() {
         let mut columns: Vec<String> = Vec::new();
         for line in BufReader::new(out).lines().map_while(Result::ok) {
+            // Switched off mid-stream: end the child rather than reading a
+            // sample nothing will look at.
+            if !enabled() {
+                let _ = child.kill();
+                break;
+            }
             // The first `#` line names the columns; their order and count vary
             // with `-s` and with the driver, so they are read, not assumed.
             if let Some(header) = line.strip_prefix('#') {
@@ -147,6 +189,9 @@ fn parse_pmon_row(columns: &[String], line: &str) -> Option<(u32, (Option<f32>, 
 /// poll, and it is the number that matters when a model is resident.
 fn poll_compute_apps() {
     loop {
+        if !enabled() {
+            return;
+        }
         let Ok(out) = crate::ports::cmd("nvidia-smi")
             .args([
                 "--query-compute-apps=pid,used_gpu_memory",
@@ -287,9 +332,40 @@ pub fn usage() -> Option<f32> {
     None
 }
 
+/// What the poller calls. Switched off, the per-platform probe never runs —
+/// which is the whole point of the setting, not a hidden row.
+pub fn host_usage() -> Option<f32> {
+    if !enabled() {
+        return None;
+    }
+    usage()
+}
+
 #[cfg(test)]
 mod nvidia_tests {
     use super::*;
+
+    /// These two share one process-wide table and one enabled flag, so they
+    /// take turns rather than racing each other into a false failure.
+    static SERIAL: Mutex<()> = Mutex::new(());
+
+    /// Off is not "hide the row": the readings stop being handed out, so the
+    /// window cannot draw a column out of a table the sampler left behind.
+    #[test]
+    fn switched_off_reports_nothing_even_with_a_full_table() {
+        let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        // Its own pid: the table outlives a test, so sharing one with the
+        // sampler's test would have each one arrive to the other's readings.
+        record(4343, (Some(50.0), 1_048_576));
+        assert!(per_process(4343).is_some());
+
+        set_gpu_enabled(false);
+        assert!(per_process(4343).is_none());
+        assert!(host_usage().is_none());
+
+        set_gpu_enabled(true);
+        assert!(per_process(4343).is_some());
+    }
 
     fn header(line: &str) -> Vec<String> {
         line.strip_prefix('#')
@@ -349,6 +425,7 @@ mod nvidia_tests {
     /// replaces rather than doubling for ever.
     #[test]
     fn two_gpus_in_one_block_add_up() {
+        let _guard = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
         record(4242, (Some(30.0), 1_048_576));
         record(4242, (Some(20.0), 1_048_576));
         let s = per_process(4242).expect("just recorded");

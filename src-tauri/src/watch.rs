@@ -11,6 +11,7 @@
 use crate::ports::PortEntry;
 use serde::Serialize;
 use std::collections::{HashMap, VecDeque};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use sysinfo::System;
@@ -226,6 +227,17 @@ pub struct SystemStats {
     pub disk_name: String,
 }
 
+/// Whether the disk is measured. Off, the volume list is never enumerated —
+/// a `statfs` per mount is cheap, but "hidden" here means not run, not drawn
+/// in white-on-white.
+static DISK: AtomicBool = AtomicBool::new(true);
+
+/// Pushed by the window from the settings page, like `set_gpu_enabled`.
+#[tauri::command]
+pub fn set_disk_enabled(enabled: bool) {
+    DISK.store(enabled, Ordering::Relaxed);
+}
+
 /// The volume worth showing: the biggest fixed one. macOS splits the boot
 /// container across `/` and `/System/Volumes/Data` and both report the same
 /// total, Linux lands on `/`, Windows on `C:` — one rule, no `#[cfg]`.
@@ -254,22 +266,28 @@ fn measure(sys: &System) -> SystemStats {
 
     // Disks are not part of the port scan, so they are enumerated here — a
     // statfs per mount, unlike the `simctl`/`docker` subprocesses that had to
-    // be moved off this tick.
-    let disks = sysinfo::Disks::new_with_refreshed_list();
-    let list = disks.list();
-    let chosen = primary_index(list.iter().map(|d| (d.total_space(), d.is_removable())));
-    let (disk_total, disk_used, disk_name) = match chosen.and_then(|i| list.get(i)) {
-        Some(d) => (
-            d.total_space(),
-            d.total_space().saturating_sub(d.available_space()),
-            d.mount_point().to_string_lossy().into_owned(),
-        ),
-        None => (0, 0, String::new()),
+    // be moved off this tick. Switched off, not even that runs; zero total is
+    // the same answer a machine with no fixed volume gives, and both hide the
+    // row rather than showing a made-up one.
+    let (disk_total, disk_used, disk_name) = if DISK.load(Ordering::Relaxed) {
+        let disks = sysinfo::Disks::new_with_refreshed_list();
+        let list = disks.list();
+        let chosen = primary_index(list.iter().map(|d| (d.total_space(), d.is_removable())));
+        match chosen.and_then(|i| list.get(i)) {
+            Some(d) => (
+                d.total_space(),
+                d.total_space().saturating_sub(d.available_space()),
+                d.mount_point().to_string_lossy().into_owned(),
+            ),
+            None => (0, 0, String::new()),
+        }
+    } else {
+        (0, 0, String::new())
     };
 
     SystemStats {
         cpu: sys.global_cpu_usage(),
-        gpu: crate::gpu::usage(),
+        gpu: crate::gpu::host_usage(),
         memory_total,
         memory_used,
         disk_total,

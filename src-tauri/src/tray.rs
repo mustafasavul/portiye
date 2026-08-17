@@ -9,6 +9,7 @@
 //! same process families the window shows, and devices in another.
 
 use std::collections::BTreeMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -23,6 +24,38 @@ pub const TRAY_ID: &str = "portiye-tray";
 /// than the screen again, which is the thing this file exists to avoid.
 const MAX_FAMILIES: usize = 30;
 
+/// What the menu is allowed to draw, and whether it exists at all.
+///
+/// The window owns these — they live in its storage and are pushed here on
+/// every start. Off means the section is not built: a hidden ports submenu
+/// costs no grouping pass, and a hidden tray icon costs nothing at all.
+static VISIBLE: AtomicBool = AtomicBool::new(true);
+static SHOW_STATS: AtomicBool = AtomicBool::new(true);
+static SHOW_PORTS: AtomicBool = AtomicBool::new(true);
+static SHOW_DEVICES: AtomicBool = AtomicBool::new(true);
+
+/// Whether the tray icon is on screen. The window asks before it decides what
+/// closing means: with no icon left, hiding the window would strand the app
+/// with no way back to it.
+pub fn tray_visible() -> bool {
+    VISIBLE.load(Ordering::Relaxed)
+}
+
+#[tauri::command]
+pub fn set_tray_options<R: Runtime>(
+    app: AppHandle<R>,
+    visible: bool,
+    stats: bool,
+    ports: bool,
+    devices: bool,
+) {
+    VISIBLE.store(visible, Ordering::Relaxed);
+    SHOW_STATS.store(stats, Ordering::Relaxed);
+    SHOW_PORTS.store(ports, Ordering::Relaxed);
+    SHOW_DEVICES.store(devices, Ordering::Relaxed);
+    refresh(&app);
+}
+
 /// Menu ids are `kill:<pid>` — or `kill:<pid>,<pid>` for a whole family — so
 /// the click handler needs no shared state.
 fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
@@ -30,34 +63,44 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
 
     // One glance line of host load, disabled so it reads as a readout rather
     // than something to click.
-    let stats = crate::watch::get_system_stats(app.state::<crate::watch::Watch>());
-    menu.append(&MenuItem::with_id(
-        app,
-        "stats",
-        stats_line(&stats),
-        false,
-        None::<&str>,
-    )?)?;
-    menu.append(&PredefinedMenuItem::separator(app)?)?;
-
-    // Reads the watcher's last scan — the tray must never run its own.
-    let ports = crate::watch::get_listening_ports(app.state::<crate::watch::Watch>());
-    if ports.is_empty() {
+    if SHOW_STATS.load(Ordering::Relaxed) {
+        let stats = crate::watch::get_system_stats(app.state::<crate::watch::Watch>());
         menu.append(&MenuItem::with_id(
             app,
-            "none",
-            t("tray.none"),
+            "stats",
+            stats_line(&stats),
             false,
             None::<&str>,
         )?)?;
-    } else {
-        menu.append(&ports_submenu(app, &ports)?)?;
+        menu.append(&PredefinedMenuItem::separator(app)?)?;
+    }
+
+    // Reads the watcher's last scan — the tray must never run its own.
+    if SHOW_PORTS.load(Ordering::Relaxed) {
+        let ports = crate::watch::get_listening_ports(app.state::<crate::watch::Watch>());
+        if ports.is_empty() {
+            menu.append(&MenuItem::with_id(
+                app,
+                "none",
+                t("tray.none"),
+                false,
+                None::<&str>,
+            )?)?;
+        } else {
+            menu.append(&ports_submenu(app, &ports)?)?;
+        }
     }
 
     // Devices: the other half of the app, reachable without opening the window.
     // Only the ones that can be toggled from here — a stopped simulator needs
     // Simulator.app to come forward anyway, which the boot command handles.
-    let devices = device_items();
+    // `list_avds` and `simctl` are subprocesses, so an unwanted section is not
+    // built rather than built and hidden.
+    let devices = if SHOW_DEVICES.load(Ordering::Relaxed) {
+        device_items()
+    } else {
+        Vec::new()
+    };
     if !devices.is_empty() {
         let items = devices
             .into_iter()
@@ -348,8 +391,17 @@ fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
 pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
     let app = app.clone();
     let _ = app.clone().run_on_main_thread(move || {
-        if let (Some(tray), Ok(menu)) = (app.tray_by_id(TRAY_ID), build_menu(&app)) {
-            let _ = tray.set_menu(Some(menu));
+        let Some(tray) = app.tray_by_id(TRAY_ID) else {
+            return;
+        };
+        let visible = tray_visible();
+        let _ = tray.set_visible(visible);
+        // A menu nobody can open is a menu not worth building — and building
+        // it would walk the device listers every five seconds for nothing.
+        if visible {
+            if let Ok(menu) = build_menu(&app) {
+                let _ = tray.set_menu(Some(menu));
+            }
         }
     });
 }

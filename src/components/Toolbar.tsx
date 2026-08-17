@@ -1,18 +1,14 @@
-import { useEffect, useState } from "react";
-import {
-  disable as disableAutostart,
-  enable as enableAutostart,
-  isEnabled as autostartEnabled,
-} from "@tauri-apps/plugin-autostart";
-import { DownloadIcon, MoonIcon, RefreshIcon, SunIcon } from "../icons";
-import { LOCALES, useI18n, type Locale } from "../i18n";
+import { useState } from "react";
+import { CopyIcon, DownloadIcon, MoonIcon, RefreshIcon, SunIcon } from "../icons";
+import { LOCALES, useI18n, useT, type Key, type Locale } from "../i18n";
 import type { Theme } from "../theme";
 
-export type View = "ports" | "history" | "logs";
-const VIEWS: { id: View; label: "nav.ports" | "nav.history" | "nav.logs" }[] = [
+export type View = "ports" | "history" | "logs" | "settings";
+const VIEWS: { id: View; label: Key }[] = [
   { id: "ports", label: "nav.ports" },
   { id: "history", label: "nav.history" },
   { id: "logs", label: "nav.logs" },
+  { id: "settings", label: "nav.settings" },
 ];
 
 export function Toolbar({
@@ -21,8 +17,6 @@ export function Toolbar({
   theme,
   onTheme,
   onRefresh,
-  format,
-  onFormat,
   onExport,
   canStreamLogs,
   lanIp,
@@ -32,8 +26,6 @@ export function Toolbar({
   theme: Theme;
   onTheme: (t: Theme) => void;
   onRefresh: () => void;
-  format: "json" | "csv";
-  onFormat: (f: "json" | "csv") => void;
   onExport: () => void;
   /** False on a machine with neither Xcode nor the Android SDK — the tab is
    *  dropped rather than opening onto a picker that can never be filled. */
@@ -43,7 +35,6 @@ export function Toolbar({
   lanIp: string | null;
 }) {
   const { t, locale, setLocale } = useI18n();
-  const autostart = useAutostart();
   const views = VIEWS.filter((v) => v.id !== "logs" || canStreamLogs);
 
   return (
@@ -71,42 +62,17 @@ export function Toolbar({
 
       {/* The other half of the LAN chips in the table: the address is one per
           machine, so it is stated once, up here, instead of on every row. */}
-      {lanIp && (
-        <span className="toolbar__ip" title={t("lan.address")}>
-          {/* An acronym, not prose — it reads the same in every locale. */}
-          <span className="toolbar__ip-label">LAN IP</span>
-          {lanIp}
-        </span>
-      )}
+      {lanIp && <LanAddress ip={lanIp} />}
 
       <div className="toolbar__spacer" />
 
       {/* Export acts on the port table, so it only exists while it is on
           screen. */}
       {view === "ports" && (
-        <>
-          {/* A native select rather than a menu: two formats do not justify a
-              popover, and this stays keyboard-navigable for free. */}
-          <div className="toolbar__group">
-            <select
-              className="select"
-              value={format}
-              onChange={(e) => onFormat(e.target.value as "json" | "csv")}
-              aria-label={t("toolbar.exportFormat")}
-            >
-              <option value="json">JSON</option>
-              <option value="csv">CSV</option>
-            </select>
-            <button
-              className="btn"
-              onClick={onExport}
-              title={t("toolbar.exportTitle")}
-            >
-              <DownloadIcon />
-              {t("toolbar.export")}
-            </button>
-          </div>
-        </>
+        <button className="btn" onClick={onExport} title={t("toolbar.exportTitle")}>
+          <DownloadIcon />
+          {t("toolbar.export")}
+        </button>
       )}
 
       {/* Language names stay in their own language — a picker you cannot read
@@ -124,23 +90,6 @@ export function Toolbar({
           </option>
         ))}
       </select>
-
-      {/* Null while the query is in flight, and permanently null outside a
-          Tauri window — a browser has no login items to toggle. */}
-      {autostart.supported && (
-        <label
-          className="toolbar__setting"
-          title={t(autostart.enabled ? "toolbar.autostartOn" : "toolbar.autostartOff")}
-        >
-          <input
-            type="checkbox"
-            className="pick"
-            checked={autostart.enabled}
-            onChange={(e) => autostart.set(e.target.checked)}
-          />
-          {t("toolbar.autostart")}
-        </label>
-      )}
 
       <button
         className="btn btn--icon"
@@ -164,38 +113,46 @@ export function Toolbar({
 }
 
 /**
- * The login item, owned by the OS rather than by us.
- *
- * ponytail: no persisted mirror of this flag. The plugin writes a LaunchAgent
- * / registry key / .desktop file, and that file *is* the state — a copy in
- * localStorage would only be a second source of truth to disagree with.
+ * This machine's address, and one click to put it on the clipboard — it exists
+ * to be typed into a phone, and typing four numbers off a screen is the part
+ * that goes wrong.
  */
-function useAutostart() {
-  const [enabled, setEnabled] = useState(false);
-  const [supported, setSupported] = useState(false);
+function LanAddress({ ip }: { ip: string }) {
+  const t = useT();
+  const [copied, setCopied] = useState(false);
 
-  useEffect(() => {
-    autostartEnabled()
-      .then((on) => {
-        // The harness stub answers `null`; a null `checked` would flip the box
-        // from controlled to uncontrolled mid-render.
-        setEnabled(!!on);
-        setSupported(true);
-      })
-      // No Tauri bridge (the Vite preview) or no support on this platform.
-      .catch(() => setSupported(false));
-  }, []);
-
-  const set = async (on: boolean) => {
-    // Optimistic: the checkbox must not lag a filesystem write.
-    setEnabled(on);
+  const copy = async () => {
     try {
-      await (on ? enableAutostart() : disableAutostart());
-      setEnabled(!!(await autostartEnabled()));
+      await navigator.clipboard.writeText(ip);
     } catch {
-      setEnabled(!on);
+      // The async clipboard needs a permission the webview does not always
+      // grant; `execCommand` is deprecated and still never blocked.
+      const box = document.createElement("textarea");
+      box.value = ip;
+      box.style.position = "fixed";
+      box.style.opacity = "0";
+      document.body.append(box);
+      box.select();
+      document.execCommand("copy");
+      box.remove();
     }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
   };
 
-  return { enabled, supported, set };
+  return (
+    <span className="toolbar__ip" title={t("lan.address")}>
+      {/* An acronym, not prose — it reads the same in every locale. */}
+      <span className="toolbar__ip-label">LAN IP:</span>
+      <span className="toolbar__ip-value">{ip}</span>
+      <button
+        className="btn btn--icon toolbar__copy"
+        onClick={copy}
+        aria-label={t("lan.copy")}
+        title={copied ? t("lan.copied") : t("lan.copy")}
+      >
+        {copied ? "✓" : <CopyIcon />}
+      </button>
+    </span>
+  );
 }

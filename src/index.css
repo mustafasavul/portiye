@@ -95,7 +95,7 @@ body {
    its whole job is to be read off and typed into a phone. */
 .toolbar__ip {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3xs);
   font-family: var(--font-mono);
   font-size: var(--text-xs);
@@ -108,6 +108,21 @@ body {
   font-family: var(--font-sans);
   letter-spacing: 0.04em;
   color: var(--color-ink-2);
+}
+
+/* The address itself, in the accent the rest of the app uses for a thing you
+ * are meant to act on — and one button to put it on the clipboard, because
+ * copying four numbers by eye is where this goes wrong. */
+.toolbar__ip-value {
+  color: var(--color-accent);
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+
+.toolbar__copy {
+  width: 22px;
+  height: 22px;
+  margin-inline-start: var(--space-2xs);
 }
 
 .toolbar__spacer {
@@ -230,6 +245,12 @@ body {
 
 .btn[aria-busy="true"] {
   cursor: progress;
+}
+
+/* A toggle that is off reads as off without a second glyph to decode. */
+.btn[aria-pressed="false"] {
+  color: var(--color-muted);
+  background: transparent;
 }
 
 .btn--primary {
@@ -1292,7 +1313,103 @@ body {
   }
 }
 
+/* ——— Settings ————————————————————————————————————————— */
+
+/* A switch that cannot do anything yet — the tray sections while the icon is
+ * hidden — reads as unavailable rather than broken. */
+.setting[data-disabled] {
+  opacity: 0.5;
+}
+
+.setting__error {
+  margin: var(--space-3xs) 0 0;
+  color: var(--color-danger);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
+.setting__version {
+  font-family: var(--font-mono);
+  color: var(--color-ink-2);
+}
+
+/* Sits at the end of a panel head, opposite the title: the way to switch this
+ * panel off, offered where you are looking at it. */
+.panel__gear {
+  margin-inline-start: var(--space-2xs);
+  color: var(--color-muted);
+}
+
+/* Its own scroller: the settings view is the whole window, and the sections
+ * below the fold must be reachable without the port table's layout. */
+.settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(22rem, 100%), 1fr));
+  align-content: start;
+}
+
+/* In a grid the panel's bottom rule lands mid-column; a top rule on every card
+ * reads as a shelf line in one column and in three alike. */
+.settings .panel {
+  border-bottom: 0;
+  border-top: var(--rule) solid var(--color-rule);
+}
+
+.settings__list {
+  display: grid;
+  gap: var(--space-sm);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* A readable measure, not the full window width — a hint stretched across a
+ * 1400px window is a line nobody finishes. */
+.setting {
+  max-inline-size: 46rem;
+}
+
+.setting__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+
+.setting__hint {
+  margin: var(--space-3xs) 0 0;
+  color: var(--color-muted);
+  font-size: var(--text-xs);
+  line-height: 1.5;
+}
+
 /* ——— Port history —————————————————————————————————————— */
+
+/* The same tracks as a row, so the labels sit over the columns they name. */
+.events__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-sm) var(--space-2xs);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* How many events of this kind are in the buffer — the reason these are
+ * buttons rather than a closed picker. */
+.tab__count {
+  margin-inline-start: var(--space-3xs);
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
 
 .events {
   list-style: none;

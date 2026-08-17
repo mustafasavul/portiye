@@ -52,6 +52,24 @@ export const CloseIcon = () => (
   </svg>
 );
 
+export const CopyIcon = () => (
+  <svg {...base}>
+    <rect x="5.5" y="5.5" width="8" height="8" rx="1.5" />
+    <path d="M10.5 3.5v-.5a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h.5" />
+  </svg>
+);
+
+/**
+ * Settings. A closed toothed outline, not spokes around a circle — spokes read
+ * as a sun at 15px, which is the icon two buttons away in the toolbar.
+ */
+export const GearIcon = () => (
+  <svg {...base}>
+    <path d="M6.75 1.9h2.5l.25 1.65 1.2.7 1.5-.7 1.25 2.15-1.2 1.15v1.4l1.2 1.15-1.25 2.15-1.5-.7-1.2.7-.25 1.65h-2.5L6.5 12.4l-1.2-.7-1.5.7L2.55 10.25l1.2-1.15v-1.4L2.55 6.55 3.8 4.4l1.5.7 1.2-.7z" />
+    <circle cx="8" cy="8" r="2.1" />
+  </svg>
+);
+
 /* ——— System gauges ————————————————————————————————————
  * Four silhouettes that stay apart at 14px: a square with legs, a square with
  * a core, stacked bars, stacked platters.

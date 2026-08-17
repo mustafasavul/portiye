@@ -9,16 +9,17 @@ import { useConfirm } from "./Confirm";
 import { useI18n } from "./i18n";
 import { usePersisted } from "./hooks/usePersisted";
 import { useShortcuts } from "./hooks/useShortcuts";
-import { Toolbar } from "./components/Toolbar";
+import { Toolbar, type View } from "./components/Toolbar";
 import { DevicePanel } from "./components/DevicePanel";
 import { SystemPanel } from "./components/SystemPanel";
 import { FastKill } from "./components/FastKill";
 import { PortTable } from "./components/PortTable";
+import { Settings } from "./components/Settings";
 import { History } from "./components/History";
 import { ProcessDetail } from "./components/ProcessDetail";
 import { LogView } from "./components/LogView";
 import { CloseIcon } from "./icons";
-import { defaultDir, mb, THRESHOLDS, thresholdLabel } from "./types";
+import { DEFAULT_PANELS, DEFAULT_TRAY, defaultDir, mb } from "./types";
 import type { Key } from "./i18n";
 import type {
   Avd,
@@ -26,6 +27,7 @@ import type {
   Family,
   KillGroup,
   KillReport,
+  Panels,
   PortEntry,
   Proc,
   RuntimeItem,
@@ -33,6 +35,7 @@ import type {
   Sort,
   SortKey,
   SystemStats,
+  TrayOptions,
 } from "./types";
 
 export default function App() {
@@ -56,7 +59,7 @@ export default function App() {
   const filterRef = useRef<HTMLInputElement>(null);
   const [ask, confirmDialog] = useConfirm();
 
-  const [view, setView] = useState<"ports" | "history" | "logs">("ports");
+  const [view, setView] = useState<View>("ports");
   const [detailPid, setDetailPid] = useState<number | null>(null);
   /** Bumped on every watcher event so the history view refetches. */
   const [revision, setRevision] = useState(0);
@@ -64,6 +67,39 @@ export default function App() {
   const [savedFilters, setSavedFilters] = usePersisted<string[]>("filters", []);
   const [format, setFormat] = usePersisted<"json" | "csv">("format", "json");
   const [memoryWarnMb, setMemoryWarnMb] = usePersisted("memoryWarnMb", 500);
+  /** Whether a process nests under whatever spawned it. Off, the table is one
+   *  flat row per process — the same processes, none hidden. */
+  const [nest, setNest] = usePersisted("nest", true);
+  /** Spread over the defaults, not read raw: a settings object saved by an
+   *  older build is missing whatever was added since. */
+  const [savedPanels, setPanels] = usePersisted("panels", DEFAULT_PANELS);
+  const [savedTray, setTray] = usePersisted("tray", DEFAULT_TRAY);
+  const panels: Panels = { ...DEFAULT_PANELS, ...savedPanels };
+  const tray: TrayOptions = { ...DEFAULT_TRAY, ...savedTray };
+
+  // Both settings live in the webview's storage, so the Rust side has to be
+  // told — on every start, not only when they change. Neither is cosmetic:
+  // one stops the GPU probes, the other stops building a menu.
+  useEffect(() => {
+    invoke("set_gpu_enabled", { enabled: panels.gpu }).catch(() => {});
+  }, [panels.gpu]);
+
+  // Same contract for the disk: off, the poller stops enumerating volumes.
+  useEffect(() => {
+    invoke("set_disk_enabled", { enabled: panels.disk }).catch(() => {});
+  }, [panels.disk]);
+
+  useEffect(() => {
+    invoke("set_tray_options", {
+      visible: tray.visible,
+      stats: tray.stats,
+      ports: tray.ports,
+      devices: tray.devices,
+    }).catch(() => {});
+  }, [tray.visible, tray.stats, tray.ports, tray.devices]);
+
+  /** Who still wants the device lists: the panel, or the tray's submenu. */
+  const wantDevices = panels.devices || tray.devices;
 
   /**
    * Ports only. This is a cached read on the Rust side — the watcher already
@@ -91,6 +127,22 @@ export default function App() {
    * this runs on demand and on a slow timer instead.
    */
   const refreshDevices = useCallback(async () => {
+    // Nothing on screen and nothing in the menu wants them: then the three
+    // subprocesses are not run at all. Hiding the panel and still shelling out
+    // to `simctl` every 30 seconds would be hiding the cost, not
+    // removing it — and the Device Logs tab goes with them, because its picker
+    // is these same lists.
+    if (!wantDevices) {
+      setAvds([]);
+      setSims([]);
+      setRuntimes([]);
+    }
+
+    // This machine's address is not device work, and the toolbar shows it
+    // whatever the panels are set to.
+    setLanIp(await invoke<string | null>("local_ip").catch(() => null));
+    if (!wantDevices) return;
+
     // `allSettled`, not `all`: these three enumerate three unrelated toolchains
     // and most machines have only some of them. Under `all`, one missing tool
     // rejected the whole batch, so a box without the Android SDK lost its
@@ -105,15 +157,11 @@ export default function App() {
     if (s.status === "fulfilled") setSims(s.value);
     if (r.status === "fulfilled") setRuntimes(r.value);
 
-    // Same slow cadence: this machine's address only changes when the network
-    // does, and it is a routing-table lookup rather than a subprocess.
-    setLanIp(await invoke<string | null>("local_ip").catch(() => null));
-
     // A lister that fails is a real fault worth showing — but it clears itself
     // on the next good pass rather than waiting for an unrelated port tick.
     const failed = [a, s, r].find((x) => x.status === "rejected");
     setError(failed ? String(failed.reason) : null);
-  }, []);
+  }, [wantDevices]);
 
   // The tray menu is drawn in Rust and cannot read the webview's dictionary,
   // so the chosen language is pushed to it. Rebuilding the menu is the whole
@@ -288,7 +336,10 @@ export default function App() {
     const members = new Map<number, Proc[]>();
     for (const proc of [...procs.values()].sort((a, b) => a.pid - b.pid)) {
       // A filter can hide the root; then the survivor heads its own family.
-      const rootId = procs.has(proc.family) ? proc.family : proc.pid;
+      // Grouping off means every process heads its own — nothing leaves the
+      // table, it just stops nesting under whatever spawned it.
+      const rootId =
+        nest && procs.has(proc.family) ? proc.family : proc.pid;
       const list = members.get(rootId);
       if (list) list.push(proc);
       else members.set(rootId, [proc]);
@@ -339,15 +390,15 @@ export default function App() {
       // Equal weights would otherwise land in map-insertion order.
       return delta || lowestPort(a) - lowestPort(b);
     });
-  }, [ports, filter, sort]);
+  }, [ports, filter, sort, nest]);
 
   /**
    * NVIDIA-only, so the column exists on the machines that have a sampler and
    * nowhere else — an empty GPU column would read as "nothing is using it".
    */
   const showGpu = useMemo(
-    () => ports.some((p) => p.gpu !== null || p.gpu_memory > 0),
-    [ports],
+    () => panels.gpu && ports.some((p) => p.gpu !== null || p.gpu_memory > 0),
+    [panels.gpu, ports],
   );
 
   const shownProcs = useMemo(
@@ -408,6 +459,16 @@ export default function App() {
   }, [shownProcs]);
 
   const visibleCount = shownProcs.reduce((n, p) => n + p.ports.length, 0);
+
+  /** Sorting by a column nobody can see reads as a random order. */
+  useEffect(() => {
+    const hidden = {
+      cpu: !panels.cpu,
+      gpu: !showGpu,
+      disk: !panels.disk,
+    } as Partial<Record<SortKey, boolean>>;
+    setSort((s) => (hidden[s.key] ? { key: "port", dir: 1 } : s));
+  }, [panels.cpu, showGpu, panels.disk]);
 
   /** Selection only ever refers to rows still on screen. */
   useEffect(() => {
@@ -573,8 +634,6 @@ export default function App() {
         theme={theme}
         onTheme={setTheme}
         onRefresh={refresh}
-        format={format}
-        onFormat={setFormat}
         onExport={exportSnapshot}
         canStreamLogs={canStreamLogs}
         lanIp={lanIp}
@@ -618,33 +677,59 @@ export default function App() {
       )}
 
       {view === "history" && <History revision={revision} />}
+      {view === "settings" && (
+        <Settings
+          panels={panels}
+          onPanels={setPanels}
+          tray={tray}
+          onTray={setTray}
+          memoryWarnMb={memoryWarnMb}
+          onMemoryWarnMb={setMemoryWarnMb}
+          format={format}
+          onFormat={setFormat}
+        />
+      )}
       {view === "logs" && <LogView devices={devices} />}
 
 
       {view === "ports" && (
       <>
-      <DevicePanel
-        title={t("devices.title")}
-        devices={devices}
-        busy={busy}
-        run={run}
-        ask={ask}
-        empty={t("devices.empty")}
-      />
+      {panels.devices && (
+        <>
+          <DevicePanel
+            title={t("devices.title")}
+            devices={devices}
+            busy={busy}
+            run={run}
+            ask={ask}
+            empty={t("devices.empty")}
+            onSettings={() => setView("settings")}
+          />
 
-      {/* Hidden entirely when the machine has no Docker, Ollama or JVM
-          daemons — an empty panel would only be noise. */}
-      {runtimeDevices.length > 0 && (
-        <DevicePanel
-          title={t("devices.runtimes")}
-          devices={runtimeDevices}
-          busy={busy}
-          run={run}
-          ask={ask}
-        />
+          {/* Hidden entirely when the machine has no Docker, Ollama or JVM
+              daemons — an empty panel would only be noise. */}
+          {runtimeDevices.length > 0 && (
+            <DevicePanel
+              title={t("devices.runtimes")}
+              devices={runtimeDevices}
+              busy={busy}
+              run={run}
+              ask={ask}
+              onSettings={() => setView("settings")}
+            />
+          )}
+        </>
       )}
 
-      <SystemPanel stats={system} />
+      {panels.system && (
+        <SystemPanel
+          stats={system}
+          showCpu={panels.cpu}
+          showGpu={panels.gpu}
+          showDisk={panels.disk}
+          onSettings={() => setView("settings")}
+        />
+      )}
 
       <section className="panel panel--fill">
         <div className="panel__head panel__head--tools">
@@ -668,6 +753,18 @@ export default function App() {
             </button>
           )}
 
+          {/* Nesting is noise on a machine running one IDE with a dozen
+              helpers. Off, every process is its own row, sorted on its own
+              numbers — the same processes, one flat list. */}
+          <button
+            className="btn"
+            aria-pressed={nest}
+            onClick={() => setNest((v) => !v)}
+            title={t("ports.childrenTitle")}
+          >
+            ↳ {t("ports.children")}
+          </button>
+
           {/* The filter only ever acted on this panel, so it lives with it. */}
           <div className="field">
             <input
@@ -688,24 +785,6 @@ export default function App() {
             </datalist>
             <span className="field__kbd">⌘K</span>
           </div>
-
-          {/* The threshold paints rows in this table and nothing else, so it
-              belongs to the table rather than to the window chrome. */}
-          <label className="toolbar__setting">
-            {t("ports.flagOver")}
-            <select
-              className="select"
-              value={memoryWarnMb}
-              onChange={(e) => setMemoryWarnMb(Number(e.target.value))}
-              aria-label={t("ports.flagAria")}
-            >
-              {THRESHOLDS.map((n) => (
-                <option key={n} value={n}>
-                  {thresholdLabel(n)}
-                </option>
-              ))}
-            </select>
-          </label>
 
           <span className="panel__count">
             {filter ? `${visibleCount} / ${ports.length}` : ports.length}
@@ -752,7 +831,9 @@ export default function App() {
                 onToggleAll={toggleAll}
                 memoryWarn={memoryWarnMb * 1_048_576}
                 lanIp={lanIp}
+                showCpu={panels.cpu}
                 showGpu={showGpu}
+                showDisk={panels.disk}
                 openPid={detailPid}
                 onOpen={(p) => setDetailPid((cur) => (cur === p.pid ? null : p.pid))}
                 busy={busy}
