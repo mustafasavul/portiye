@@ -4,6 +4,69 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0]
+
+### Added
+
+- **A Settings view**, the fourth tab. Everything that is set once and left
+  alone moved here — the memory threshold, the export format, start at login —
+  and the panels that can be switched off carry a gear in their heading that
+  opens it, so "how do I hide this?" is answered where the question is asked.
+- **Switches for every gauge and column**: CPU, GPU, memory, disk, the Devices
+  panel and the System panel. Off means off, not painted white on white:
+
+  - GPU off and nothing measures it — no `ioreg` on the poll tick, no
+    `nvidia-smi` sampler, and a streaming sampler ends its own child process.
+  - Disk off and the volume list is never enumerated.
+  - Devices off and `emulator`, `adb`, `simctl` and `docker` are never run.
+    The Device Logs tab goes with them, because its picker is those lists.
+
+- **Menu-bar controls.** The icon can be hidden, and its load readout, ports
+  submenu and devices submenu each switched off. With the icon hidden, closing
+  the window quits portiye rather than hiding it — the alternative is a running
+  app with no way back to it.
+- **A Related toggle** over the port table. On, a process nests under whatever
+  started it; off, every process gets its own row. Nothing is hidden either
+  way.
+- **Copy on the LAN address.** It exists to be typed into a phone, and typing
+  four numbers off a screen is the part that goes wrong.
+- **Port history reads like a table**: labelled columns, a filter over port,
+  process and path, and event-type buttons carrying their counts, so `616` is
+  identifiable as a PID without being told.
+- **A Help menu** with the repository, the issue tracker and the release notes,
+  in all 28 languages.
+- **The version**, in Settings → About.
+
+### Fixed
+
+- **Start at login failed silently.** Writing the login item can be refused;
+  the switch simply flipped back, which read as a broken toggle. The error is
+  now shown, and the state is read back from the OS rather than assumed.
+- **Sorting by a hidden column** left the table in what looked like a random
+  order. The sort falls back to port when its column goes away.
+
+### Changed
+
+- **The tray no longer scans devices on the main thread.** `build_menu` ran
+  `simctl list` — measured at 778ms — inside `run_on_main_thread`, every five
+  seconds: the menu bar was blocked for a sixth of its life. Device rows are
+  scanned on their own 30-second thread into a cache the menu only reads.
+- **The disk is measured once a minute**, not once a tick. Enumerating volumes
+  costs ~20ms on APFS, four times the whole process refresh beside it, and free
+  space does not move in five seconds.
+- **A tray family kill is one scan.** Each `kill_process` built its own
+  `System`, so a five-process family paid for five full scans of the machine.
+- **The kill paths, the JVM daemon sweep and the process detail panel** ask for
+  the process fields they read instead of everything sysinfo can collect, and
+  `descendants` walks a set rather than re-scanning a Vec per child.
+- **Device logs are batched.** Each `log-line` event lands in its own task, so
+  React batched none of them: `logcat` on a busy device meant hundreds of
+  renders a second over 2000 rows. Lines flush on a 100ms interval.
+- **Tailwind is gone.** It was in the build for its preflight and nothing else
+  — no utility class, no `@apply`, no theme — and it was what kept `<dialog>`
+  from centring. Twenty lines of reset replace it; the stylesheet is 6.5 KB
+  smaller and two dependencies lighter.
+
 ## [0.4.0]
 
 ### Added
