@@ -192,4 +192,6 @@ export const id: Strings = {
   "history.filter": "Saring peristiwa",
   "history.filterAria": "Saring peristiwa berdasarkan port, proses, atau jalur",
   "history.emptyFilter": "Tidak ada peristiwa yang cocok dengan filter ini.",
+
+  "settings.memoryHint": "Menyembunyikan kolom dan pengukur memori. Tetap dibaca bersama pemindaian.",
 };

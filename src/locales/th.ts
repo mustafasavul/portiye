@@ -192,4 +192,6 @@ export const th: Strings = {
   "history.filter": "กรองเหตุการณ์",
   "history.filterAria": "กรองเหตุการณ์ตามพอร์ต โปรเซส หรือพาธ",
   "history.emptyFilter": "ไม่มีเหตุการณ์ที่ตรงกับตัวกรองนี้",
+
+  "settings.memoryHint": "ซ่อนคอลัมน์และเกจหน่วยความจำ ค่านี้ถูกอ่านพร้อมการสแกนอยู่แล้ว",
 };

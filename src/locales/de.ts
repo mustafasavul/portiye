@@ -194,4 +194,6 @@ export const de: Strings = {
   "history.filter": "Ereignisse filtern",
   "history.filterAria": "Ereignisse nach Port, Prozess oder Pfad filtern",
   "history.emptyFilter": "Kein Ereignis passt zu diesem Filter.",
+
+  "settings.memoryHint": "Blendet Speicherspalte und -anzeige aus. Wird ohnehin beim Scan gelesen.",
 };

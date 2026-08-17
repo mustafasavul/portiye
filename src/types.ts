@@ -167,6 +167,7 @@ export type Panels = {
   cpu: boolean;
   /** Not display-only: off, the Rust side stops measuring the GPU. */
   gpu: boolean;
+  memory: boolean;
   disk: boolean;
 };
 
@@ -184,6 +185,7 @@ export const DEFAULT_PANELS: Panels = {
   system: true,
   cpu: true,
   gpu: true,
+  memory: true,
   disk: true,
 };
 

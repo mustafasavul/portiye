@@ -192,4 +192,6 @@ export const bn: Strings = {
   "history.filter": "ইভেন্ট ছাঁকুন",
   "history.filterAria": "পোর্ট, প্রসেস বা পাথ অনুযায়ী ইভেন্ট ছাঁকুন",
   "history.emptyFilter": "এই ফিল্টারের সাথে কোনো ইভেন্ট মেলে না।",
+
+  "settings.memoryHint": "মেমরি কলাম ও গেজ লুকায়। এটি যেভাবেই হোক স্ক্যানের সাথে পড়া হয়।",
 };

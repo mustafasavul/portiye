@@ -194,4 +194,6 @@ export const pt: Strings = {
   "history.filter": "Filtrar eventos",
   "history.filterAria": "Filtrar eventos por porta, processo ou caminho",
   "history.emptyFilter": "Nenhum evento corresponde a este filtro.",
+
+  "settings.memoryHint": "Oculta a coluna e o medidor de memória. É lido junto com a varredura de qualquer forma.",
 };

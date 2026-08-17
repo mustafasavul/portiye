@@ -192,4 +192,6 @@ export const yo: Strings = {
   "history.filter": "Sẹ́ àwọn ìṣẹ̀lẹ̀",
   "history.filterAria": "Sẹ́ àwọn ìṣẹ̀lẹ̀ nípa èbúté, ìlànà tàbí ọ̀nà",
   "history.emptyFilter": "Kò sí ìṣẹ̀lẹ̀ tí ó bá àṣẹ́ yìí mu.",
+
+  "settings.memoryHint": "Ó fi ọwọ̀n ìrántí àti òṣùwọ̀n rẹ̀ pamọ́. A ń kà á pẹ̀lú àyẹ̀wò lọ́nàkọnà.",
 };

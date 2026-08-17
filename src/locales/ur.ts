@@ -192,4 +192,6 @@ export const ur: Strings = {
   "history.filter": "واقعات چھانیں",
   "history.filterAria": "پورٹ، پروسیس یا راستے کے مطابق واقعات چھانیں",
   "history.emptyFilter": "اس فلٹر سے کوئی واقعہ میل نہیں کھاتا۔",
+
+  "settings.memoryHint": "میموری کالم اور گیج چھپاتا ہے۔ یہ بہرحال اسکین کے ساتھ پڑھا جاتا ہے۔",
 };

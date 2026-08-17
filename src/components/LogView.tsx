@@ -9,6 +9,17 @@ import type { Device } from "../types";
 const CAP = 2000;
 
 /**
+ * How often arrived lines are handed to React.
+ *
+ * `logcat` on a busy device emits hundreds of lines a second, and each Tauri
+ * event lands in its own task — so a `setLines` per line was a render per
+ * line, each one reconciling up to 2000 rows and copying the whole array. The
+ * lines are collected in a ref and flushed on this interval instead; ten
+ * renders a second is under a frame's worth of work and still reads as live.
+ */
+const FLUSH_MS = 100;
+
+/**
  * Live device logs — `simctl log stream` for iOS, `adb logcat` for Android.
  *
  * ponytail: a plain list, no virtualisation. 2000 rows of text is nothing for
@@ -23,6 +34,8 @@ export function LogView({ devices }: { devices: Device[] }) {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const boxRef = useRef<HTMLDivElement>(null);
+  /** Lines that have arrived since the last flush. */
+  const pending = useRef<string[]>([]);
 
   // Only running devices have anything to stream.
   const streamable = devices.filter(
@@ -30,13 +43,20 @@ export function LogView({ devices }: { devices: Device[] }) {
   );
 
   useEffect(() => {
-    const un = listen<string>("log-line", (e) =>
+    const un = listen<string>("log-line", (e) => {
+      pending.current.push(e.payload);
+    });
+    const flush = setInterval(() => {
+      if (pending.current.length === 0) return;
+      const batch = pending.current;
+      pending.current = [];
       setLines((prev) => {
-        const next = prev.length >= CAP ? prev.slice(prev.length - CAP + 1) : prev;
-        return [...next, e.payload];
-      }),
-    );
+        const next = prev.concat(batch);
+        return next.length > CAP ? next.slice(next.length - CAP) : next;
+      });
+    }, FLUSH_MS);
     return () => {
+      clearInterval(flush);
       un.then((f) => f());
     };
   }, []);
@@ -48,6 +68,8 @@ export function LogView({ devices }: { devices: Device[] }) {
   const start = async (id: string) => {
     setError(null);
     setNotice(null);
+    // Whatever arrived from the previous device must not land in the new view.
+    pending.current = [];
     setLines([]);
     setSource(id);
     if (!id) {

@@ -190,4 +190,6 @@ export const zh: Strings = {
   "history.filter": "筛选事件",
   "history.filterAria": "按端口、进程或路径筛选事件",
   "history.emptyFilter": "没有符合此筛选条件的事件。",
+
+  "settings.memoryHint": "隐藏内存列和仪表。无论如何都会随扫描一起读取。",
 };

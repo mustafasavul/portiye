@@ -192,4 +192,6 @@ export const ms: Strings = {
   "history.filter": "Tapis peristiwa",
   "history.filterAria": "Tapis peristiwa mengikut port, proses atau laluan",
   "history.emptyFilter": "Tiada peristiwa sepadan dengan penapis ini.",
+
+  "settings.memoryHint": "Menyembunyikan lajur dan tolok memori. Ia tetap dibaca bersama imbasan.",
 };

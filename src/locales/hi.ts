@@ -192,4 +192,6 @@ export const hi: Strings = {
   "history.filter": "इवेंट छानें",
   "history.filterAria": "पोर्ट, प्रोसेस या पथ से इवेंट छानें",
   "history.emptyFilter": "इस फ़िल्टर से कोई इवेंट मेल नहीं खाता।",
+
+  "settings.memoryHint": "मेमोरी कॉलम और गेज छिपाता है। यह वैसे भी स्कैन के साथ पढ़ा जाता है।",
 };

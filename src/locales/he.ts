@@ -192,4 +192,6 @@ export const he: Strings = {
   "history.filter": "סינון אירועים",
   "history.filterAria": "סינון אירועים לפי פורט, תהליך או נתיב",
   "history.emptyFilter": "אין אירוע התואם לסינון הזה.",
+
+  "settings.memoryHint": "מסתיר את עמודת הזיכרון ואת המד. הוא נקרא עם הסריקה כך או כך.",
 };

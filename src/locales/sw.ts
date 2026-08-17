@@ -192,4 +192,6 @@ export const sw: Strings = {
   "history.filter": "Chuja matukio",
   "history.filterAria": "Chuja matukio kwa bandari, mchakato au njia",
   "history.emptyFilter": "Hakuna tukio linalolingana na kichujio hiki.",
+
+  "settings.memoryHint": "Huficha safu na kipimo cha kumbukumbu. Husomwa pamoja na skani vyovyote vile.",
 };

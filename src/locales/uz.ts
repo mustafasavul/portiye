@@ -192,4 +192,6 @@ export const uz: Strings = {
   "history.filter": "Hodisalarni saralash",
   "history.filterAria": "Hodisalarni port, jarayon yoki yo‘l bo‘yicha saralash",
   "history.emptyFilter": "Bu saralashga mos hodisa yo‘q.",
+
+  "settings.memoryHint": "Xotira ustuni va ko‘rsatkichini yashiradi. U baribir skan bilan birga o‘qiladi.",
 };

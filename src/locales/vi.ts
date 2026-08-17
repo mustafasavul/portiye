@@ -192,4 +192,6 @@ export const vi: Strings = {
   "history.filter": "Lọc sự kiện",
   "history.filterAria": "Lọc sự kiện theo cổng, tiến trình hoặc đường dẫn",
   "history.emptyFilter": "Không có sự kiện nào khớp bộ lọc này.",
+
+  "settings.memoryHint": "Ẩn cột và đồng hồ bộ nhớ. Dù sao cũng được đọc cùng lần quét.",
 };

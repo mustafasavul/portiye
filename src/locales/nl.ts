@@ -193,4 +193,6 @@ export const nl: Strings = {
   "history.filter": "Gebeurtenissen filteren",
   "history.filterAria": "Gebeurtenissen filteren op poort, proces of pad",
   "history.emptyFilter": "Geen gebeurtenis komt overeen met dit filter.",
+
+  "settings.memoryHint": "Verbergt de geheugenkolom en -meter. Wordt hoe dan ook bij de scan gelezen.",
 };

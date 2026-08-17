@@ -79,6 +79,12 @@ export function Settings({
           onChange={panel("gpu")}
         />
         <Switch
+          label={t("system.memory")}
+          hint={t("settings.memoryHint")}
+          checked={panels.memory}
+          onChange={panel("memory")}
+        />
+        <Switch
           label={t("system.disk")}
           hint={t("settings.diskHint")}
           checked={panels.disk}

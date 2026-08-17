@@ -192,4 +192,6 @@ export const fa: Strings = {
   "history.filter": "پالایش رویدادها",
   "history.filterAria": "پالایش رویدادها بر پایهٔ درگاه، فرایند یا مسیر",
   "history.emptyFilter": "رویدادی با این پالایه مطابقت ندارد.",
+
+  "settings.memoryHint": "ستون و نشانگر حافظه را پنهان می‌کند. در هر حال همراه پویش خوانده می‌شود.",
 };

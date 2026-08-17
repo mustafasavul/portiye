@@ -74,8 +74,14 @@ export default function App() {
    *  older build is missing whatever was added since. */
   const [savedPanels, setPanels] = usePersisted("panels", DEFAULT_PANELS);
   const [savedTray, setTray] = usePersisted("tray", DEFAULT_TRAY);
-  const panels: Panels = { ...DEFAULT_PANELS, ...savedPanels };
-  const tray: TrayOptions = { ...DEFAULT_TRAY, ...savedTray };
+  const panels: Panels = useMemo(
+    () => ({ ...DEFAULT_PANELS, ...savedPanels }),
+    [savedPanels],
+  );
+  const tray: TrayOptions = useMemo(
+    () => ({ ...DEFAULT_TRAY, ...savedTray }),
+    [savedTray],
+  );
 
   // Both settings live in the webview's storage, so the Rust side has to be
   // told — on every start, not only when they change. Neither is cosmetic:
@@ -183,9 +189,11 @@ export default function App() {
       setRevision((r) => r + 1);
     });
     // Device enumeration on a slow timer, and a backstop for ports in case the
-    // watcher thread ever dies and stops emitting.
+    // watcher thread ever dies and stops emitting. The backstop is deliberately
+    // slower than the 5s tick it covers for: any faster only duplicates the
+    // event that already arrived.
     const devices = setInterval(refreshDevices, 30_000);
-    const backstop = setInterval(refreshPorts, 15_000);
+    const backstop = setInterval(refreshPorts, 30_000);
     return () => {
       clearInterval(devices);
       clearInterval(backstop);
@@ -465,10 +473,11 @@ export default function App() {
     const hidden = {
       cpu: !panels.cpu,
       gpu: !showGpu,
+      memory: !panels.memory,
       disk: !panels.disk,
     } as Partial<Record<SortKey, boolean>>;
     setSort((s) => (hidden[s.key] ? { key: "port", dir: 1 } : s));
-  }, [panels.cpu, showGpu, panels.disk]);
+  }, [panels.cpu, showGpu, panels.memory, panels.disk]);
 
   /** Selection only ever refers to rows still on screen. */
   useEffect(() => {
@@ -726,6 +735,7 @@ export default function App() {
           stats={system}
           showCpu={panels.cpu}
           showGpu={panels.gpu}
+          showMemory={panels.memory}
           showDisk={panels.disk}
           onSettings={() => setView("settings")}
         />
@@ -833,6 +843,7 @@ export default function App() {
                 lanIp={lanIp}
                 showCpu={panels.cpu}
                 showGpu={showGpu}
+                showMemory={panels.memory}
                 showDisk={panels.disk}
                 openPid={detailPid}
                 onOpen={(p) => setDetailPid((cur) => (cur === p.pid ? null : p.pid))}

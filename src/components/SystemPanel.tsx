@@ -20,6 +20,7 @@ export function SystemPanel({
   stats,
   showCpu,
   showGpu,
+  showMemory,
   showDisk,
   onSettings,
 }: {
@@ -29,6 +30,7 @@ export function SystemPanel({
    *  from flickering one last reading. */
   showCpu: boolean;
   showGpu: boolean;
+  showMemory: boolean;
   showDisk: boolean;
   /** Opens the settings view, where these gauges can be switched off. */
   onSettings: () => void;
@@ -69,12 +71,14 @@ export function SystemPanel({
               detail={t("system.load")}
             />
           )}
-          <Gauge
-            icon={<MemoryIcon />}
-            label={t("system.memory")}
-            percent={memPct}
-            detail={`${mb(stats.memory_used)} / ${mb(stats.memory_total)}`}
-          />
+          {showMemory && (
+            <Gauge
+              icon={<MemoryIcon />}
+              label={t("system.memory")}
+              percent={memPct}
+              detail={`${mb(stats.memory_used)} / ${mb(stats.memory_total)}`}
+            />
+          )}
           {/* A machine with no fixed volume reports nothing rather than 0%. */}
           {showDisk && stats.disk_total > 0 && (
             <Gauge

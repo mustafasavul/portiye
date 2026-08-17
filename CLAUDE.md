@@ -101,9 +101,18 @@ working app. `risk.ts` returns *keys*, not prose, so warnings translate at the
 point they are shown. `scripts/check.mjs` catches the two things tsc cannot:
 a typo'd key and a dropped `{placeholder}`.
 
-**Locale files are imported statically**, all 28 of them. That is ~160 KB of
-the bundle; the app loads off local disk and the language switch has no
-loading state. Reach for `import()` only if the count doubles.
+**Locale files are imported statically**, all 28 of them. Measured: 257 KB of
+the 504 KB bundle, 70 KB gzipped — over half of it, and still nothing for an
+app that loads off local disk, where the language switch has no loading state.
+Reach for `import()` only if the count doubles.
+
+**No CSS framework.** Tailwind was in the build for its preflight and nothing
+else — zero utility classes, no `@apply`, no theme — so it was a plugin, two
+dependencies and 6.5 KB of CSS for a reset, and the reason `<dialog>` would not
+centre. `index.css` now opens with the twenty lines it actually leaned on:
+`box-sizing`, zeroed heading/paragraph/list margins, `font: inherit` on form
+controls, bare buttons, `display: block` on svg. Verified at 320 and 1280 px,
+including the confirm dialog's centring.
 
 **RTL is logical properties, not a mirrored stylesheet.** `dir="rtl"` on the
 root, and `margin-inline-start` / `text-align: end` / `inset-inline-end`
@@ -177,6 +186,12 @@ almost nothing free — it lends the rest out as cache — so `free` sits near
 machine, a permanent 85% that never twitches. The gauge looked frozen because
 it was. Use `total - available_memory()`, which counts reclaimable cache as
 free: it answers "how much room is left" and it actually moves.
+
+**A Tauri event per line is a React render per line.** Device logs arrive one
+`log-line` event at a time, each in its own task, so React batches none of
+them: `logcat` on a busy device meant hundreds of renders a second, each
+reconciling up to 2000 rows and copying the whole array. Lines land in a ref
+and flush on a 100ms interval. Any other firehose event needs the same shape.
 
 **`window.confirm` and `window.prompt` do nothing in the Tauri webview.** They
 return without showing a panel, so every guarded action silently no-ops. This

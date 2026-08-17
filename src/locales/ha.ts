@@ -192,4 +192,6 @@ export const ha: Strings = {
   "history.filter": "Tace abubuwan",
   "history.filterAria": "Tace abubuwan bisa tashar, tsari ko hanya",
   "history.emptyFilter": "Babu abin da ya dace da wannan tacewa.",
+
+  "settings.memoryHint": "Yana ɓoye ginshiƙin ƙwaƙwalwa da ma'auninsa. Ana karanta shi tare da binciken ko ta yaya.",
 };

@@ -4,9 +4,10 @@
  * One file per language in this folder; this is the only place that knows the
  * list. To add a language: copy `en.ts`, translate it, and add one row here.
  *
- * ponytail: static imports, not `import()`. Every string in every language is
- * ~200 KB of the bundle — nothing for an app that loads off local disk, and it
- * buys a language switch with no loading state and no async in the provider.
+ * ponytail: static imports, not `import()`. Measured, these 28 tables are
+ * 257 KB of the bundle (70 KB gzipped) — over half of it, and still nothing for
+ * an app that loads off local disk. They buy a language switch with no loading
+ * state and no async in the provider.
  */
 import { en } from "./en";
 import { am } from "./am";

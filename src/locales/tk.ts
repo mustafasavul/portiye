@@ -192,4 +192,6 @@ export const tk: Strings = {
   "history.filter": "Wakalary süz",
   "history.filterAria": "Wakalary port, proses ýa-da ýol boýunça süz",
   "history.emptyFilter": "Bu süzgüje gabat gelýän waka ýok.",
+
+  "settings.memoryHint": "Ýat sütünini we görkezijisini gizleýär. Ol nähili bolsa-da skan bilen bilelikde okalýar.",
 };

@@ -192,4 +192,6 @@ export const fil: Strings = {
   "history.filter": "Salain ang mga kaganapan",
   "history.filterAria": "Salain ang mga kaganapan ayon sa port, proseso o path",
   "history.emptyFilter": "Walang kaganapang tumutugma sa filter na ito.",
+
+  "settings.memoryHint": "Itinatago ang column at gauge ng memorya. Binabasa pa rin kasabay ng scan.",
 };

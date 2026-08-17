@@ -19,6 +19,7 @@ export function PortTable({
   lanIp,
   showCpu,
   showGpu,
+  showMemory,
   showDisk,
 }: {
   families: Family[];
@@ -41,6 +42,7 @@ export function PortTable({
   /** True only where the setting is on *and* an NVIDIA sampler is reporting;
    *  elsewhere the column is dropped rather than filled with zeroes. */
   showGpu: boolean;
+  showMemory: boolean;
   showDisk: boolean;
 }) {
   const t = useT();
@@ -92,9 +94,16 @@ export function PortTable({
             <SortHead sort={sort} onSort={onSort} k="disk" label="system.disk" />
           </span>
         )}
-        <span className="port__mem">
-          <SortHead sort={sort} onSort={onSort} k="memory" label="table.memory" />
-        </span>
+        {showMemory && (
+          <span className="port__mem">
+            <SortHead
+              sort={sort}
+              onSort={onSort}
+              k="memory"
+              label="table.memory"
+            />
+          </span>
+        )}
         <span className="port__pid">
           <SortHead sort={sort} onSort={onSort} k="pid" label="table.pid" />
         </span>
@@ -122,6 +131,7 @@ export function PortTable({
             lanIp={lanIp}
             showCpu={showCpu}
             showGpu={showGpu}
+            showMemory={showMemory}
             showDisk={showDisk}
           />
         ))}
@@ -147,6 +157,7 @@ function ProcRow({
   lanIp,
   showCpu,
   showGpu,
+  showMemory,
   showDisk,
 }: {
   proc: Proc;
@@ -161,6 +172,7 @@ function ProcRow({
   lanIp: string | null;
   showCpu: boolean;
   showGpu: boolean;
+  showMemory: boolean;
   showDisk: boolean;
 }) {
   const t = useT();
@@ -241,16 +253,18 @@ function ProcRow({
         </span>
       )}
       {showDisk && <span className="port__disk">{rate(proc.disk)}</span>}
-      <span className="port__mem">
-        {mb(proc.memory)}
-        {/* The threshold is a user setting, so the marker explains itself
-            rather than leaving a bare colour to be decoded. */}
-        {hot && (
-          <span className="port__hot" title={t("table.hot")}>
-            ⚠
-          </span>
-        )}
-      </span>
+      {showMemory && (
+        <span className="port__mem">
+          {mb(proc.memory)}
+          {/* The threshold is a user setting, so the marker explains itself
+              rather than leaving a bare colour to be decoded. */}
+          {hot && (
+            <span className="port__hot" title={t("table.hot")}>
+              ⚠
+            </span>
+          )}
+        </span>
+      )}
       <span className="port__pid">{proc.pid}</span>
       <span className="port__action">
         <button

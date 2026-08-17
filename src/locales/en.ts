@@ -84,6 +84,7 @@ export const en = {
   "settings.cpuHint": "Hides the CPU column and gauge. Nothing extra runs either way.",
   "settings.gpuHint":
     "Off, the GPU is never measured: no probe on each scan, no nvidia-smi sampler.",
+  "settings.memoryHint": "Hides the memory column and gauge. Read with the scan either way.",
   "settings.diskHint": "Hides the disk column and gauge.",
   "settings.tray": "Menu bar",
   "settings.trayVisible": "Show the icon",

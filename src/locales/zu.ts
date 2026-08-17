@@ -192,4 +192,6 @@ export const zu: Strings = {
   "history.filter": "Hlunga imicimbi",
   "history.filterAria": "Hlunga imicimbi ngechweba, inqubo noma indlela",
   "history.emptyFilter": "Awukho umcimbi ohambisana nalesi sihlungi.",
+
+  "settings.memoryHint": "Ifihla ikholomu ne-gauge yenkumbulo. Ifundwa nokuskena noma kunjalo.",
 };

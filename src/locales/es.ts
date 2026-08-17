@@ -194,4 +194,6 @@ export const es: Strings = {
   "history.filter": "Filtrar eventos",
   "history.filterAria": "Filtrar eventos por puerto, proceso o ruta",
   "history.emptyFilter": "Ningún evento coincide con este filtro.",
+
+  "settings.memoryHint": "Oculta la columna y el medidor de memoria. Se lee con el escaneo igualmente.",
 };

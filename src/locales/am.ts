@@ -192,4 +192,6 @@ export const am: Strings = {
   "history.filter": "ክስተቶችን አጣራ",
   "history.filterAria": "ክስተቶችን በፖርት፣ ሂደት ወይም መንገድ አጣራ",
   "history.emptyFilter": "ከዚህ ማጣሪያ ጋር የሚዛመድ ክስተት የለም።",
+
+  "settings.memoryHint": "የማህደረ ትውስታ አምድና መለኪያ ይደብቃል። በማንኛውም ሁኔታ ከቅኝቱ ጋር ይነበባል።",
 };

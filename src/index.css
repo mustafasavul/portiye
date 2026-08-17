@@ -11,7 +11,68 @@
 @import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
 @import "./tokens.css";
-@import "tailwindcss";
+
+/* ——— Reset ——————————————————————————————————————————
+ * Tailwind was here for its preflight and nothing else — the app uses no
+ * utility class, no `@apply`, no theme. That was a build plugin, two
+ * dependencies and 6.5 KB of CSS for the rules below, and it is also what
+ * zeroed `<dialog>`'s centring margin (see CLAUDE.md). This is the same reset,
+ * cut to what this stylesheet actually leans on.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+h1,
+h2,
+h3,
+p,
+figure,
+ul,
+ol {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+/* Headings are sized by their class, never by their level. */
+h1,
+h2,
+h3 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/* Form controls inherit nothing by default, and Safari adds its own margins. */
+button,
+input,
+select,
+textarea {
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+/* Every button here draws its own chrome; none wants the native one. */
+button {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+
+/* Inline SVG sits on the text baseline otherwise, which adds a few stray
+ * pixels under every icon button. */
+svg {
+  display: block;
+}
 
 /* ——— Base ——————————————————————————————————————————— */
 

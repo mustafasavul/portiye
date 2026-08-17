@@ -192,4 +192,6 @@ export const ar: Strings = {
   "history.filter": "تصفية الأحداث",
   "history.filterAria": "تصفية الأحداث حسب المنفذ أو العملية أو المسار",
   "history.emptyFilter": "لا يوجد حدث يطابق هذه التصفية.",
+
+  "settings.memoryHint": "يخفي عمود الذاكرة ومقياسها. تُقرأ مع الفحص على أي حال.",
 };

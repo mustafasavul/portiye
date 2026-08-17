@@ -198,4 +198,6 @@ export const tr: Strings = {
     "Bu, konteynerleri veya sanal makineleri barındırıyor. İçinde çalışan her şey de kapanır.",
   "risk.device":
     "Bu, çalışan bir emülatör veya simülatörü besliyor. Cihaz oturumu biter ve kaydedilmemiş uygulama durumu kaybolur.",
+
+  "settings.memoryHint": "Bellek sütununu ve göstergesini gizler. İkisi de tarama sırasında okunur.",
 };
