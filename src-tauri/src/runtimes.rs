@@ -12,7 +12,7 @@
 
 use serde::Serialize;
 use std::path::PathBuf;
-use sysinfo::System;
+use sysinfo::{ProcessRefreshKind, RefreshKind, System, UpdateKind};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct Runtime {
@@ -227,7 +227,16 @@ fn ollama() -> Vec<Runtime> {
 /// hold gigabytes. They need no CLI to find — they are just processes — which
 /// is what makes this provider work on every platform.
 fn jvm_daemons() -> Vec<Runtime> {
-    let sys = System::new_all();
+    // Only argv and RSS are read below, so only those are collected: a full
+    // `System::new_all()` also samples every process's CPU, disk and owner,
+    // for a pass that is looking for two names.
+    let sys = System::new_with_specifics(
+        RefreshKind::nothing().with_processes(
+            ProcessRefreshKind::nothing()
+                .with_cmd(UpdateKind::Always)
+                .with_memory(),
+        ),
+    );
     sys.processes()
         .values()
         .filter_map(|p| {

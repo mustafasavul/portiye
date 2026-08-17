@@ -10,6 +10,8 @@
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Mutex;
+use std::time::Duration;
 
 use tauri::menu::{IsMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -23,6 +25,19 @@ pub const TRAY_ID: &str = "portiye-tray";
 /// Families listed before the menu is truncated. Past this the menu is taller
 /// than the screen again, which is the thing this file exists to avoid.
 const MAX_FAMILIES: usize = 30;
+
+/// How often the device rows are re-scanned. The same 30 seconds the window
+/// uses, and for the same reason: `simctl list` costs ~0.8s.
+const DEVICE_POLL: Duration = Duration::from_secs(30);
+
+/// The device rows, scanned on a thread of their own.
+///
+/// This used to be scanned inside `build_menu`, which runs on the main thread
+/// every five seconds — so every five seconds the menu bar froze for the ~0.8s
+/// `simctl list` takes, plus `adb`. The window moved device enumeration off the
+/// port tick long ago; the tray was still doing it, and on the one thread that
+/// must never block.
+static DEVICES: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
 
 /// What the menu is allowed to draw, and whether it exists at all.
 ///
@@ -53,7 +68,12 @@ pub fn set_tray_options<R: Runtime>(
     SHOW_STATS.store(stats, Ordering::Relaxed);
     SHOW_PORTS.store(ports, Ordering::Relaxed);
     SHOW_DEVICES.store(devices, Ordering::Relaxed);
-    refresh(&app);
+    // Off, the cached rows are dropped rather than kept warm for a section
+    // that is no longer drawn; on, they are scanned without waiting a round.
+    std::thread::spawn(move || {
+        rescan_devices(&app);
+        refresh(&app);
+    });
 }
 
 /// Menu ids are `kill:<pid>` — or `kill:<pid>,<pid>` for a whole family — so
@@ -94,13 +114,10 @@ fn build_menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<Menu<R>> {
     // Devices: the other half of the app, reachable without opening the window.
     // Only the ones that can be toggled from here — a stopped simulator needs
     // Simulator.app to come forward anyway, which the boot command handles.
-    // `list_avds` and `simctl` are subprocesses, so an unwanted section is not
-    // built rather than built and hidden.
-    let devices = if SHOW_DEVICES.load(Ordering::Relaxed) {
-        device_items()
-    } else {
-        Vec::new()
-    };
+    //
+    // A cached read. The scan happens on `scan_devices`'s own thread; nothing
+    // here spawns a subprocess, because everything here runs on the main one.
+    let devices = DEVICES.lock().map(|d| d.clone()).unwrap_or_default();
     if !devices.is_empty() {
         let items = devices
             .into_iter()
@@ -355,10 +372,11 @@ fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
             std::thread::spawn(move || {
                 let (kind, rest) = id.split_once(':').unwrap_or((&id, ""));
                 match kind {
+                    // One call, not one per pid: each `kill_process` builds its
+                    // own `System`, so a five-process family paid for five
+                    // full scans of the machine.
                     "kill" => {
-                        for pid in pids_of(&id) {
-                            let _ = crate::ports::kill_process(pid);
-                        }
+                        crate::ports::kill_processes(pids_of(&id));
                     }
                     "avd" => match rest.split_once(':') {
                         Some(("stop", serial)) => {
@@ -380,6 +398,9 @@ fn on_menu_event<R: Runtime>(app: &AppHandle<R>, id: &str) {
                     },
                     _ => return,
                 }
+                // Straight to the scan: waiting for the next 30-second round
+                // would leave the menu saying "Launch" for a booted device.
+                rescan_devices(&app);
                 refresh(&app);
             });
         }
@@ -406,7 +427,31 @@ pub fn refresh<R: Runtime>(app: &AppHandle<R>) {
     });
 }
 
+/// Re-scan the devices into the cache and redraw if they moved. Runs off the
+/// main thread — it shells out to `emulator`, `adb` and `simctl`.
+fn rescan_devices<R: Runtime>(app: &AppHandle<R>) {
+    let wanted = tray_visible() && SHOW_DEVICES.load(Ordering::Relaxed);
+    let next = if wanted { device_items() } else { Vec::new() };
+    let Ok(mut cache) = DEVICES.lock() else {
+        return;
+    };
+    if *cache == next {
+        return;
+    }
+    *cache = next;
+    drop(cache);
+    refresh(app);
+}
+
 pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
+    // Its own thread, on its own cadence. `refresh` is called every port tick
+    // and must stay a menu rebuild, not a round of subprocesses.
+    let scanner = app.clone();
+    std::thread::spawn(move || loop {
+        rescan_devices(&scanner);
+        std::thread::sleep(DEVICE_POLL);
+    });
+
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(app.default_window_icon().unwrap().clone())
         .icon_as_template(true) // macOS menu bar: adapt to light/dark

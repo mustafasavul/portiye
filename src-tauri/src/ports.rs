@@ -7,7 +7,7 @@
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::process::Command;
-use sysinfo::{Pid, System};
+use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct PortEntry {
@@ -353,13 +353,17 @@ fn elevation_hint() -> String {
 ///
 /// Our own PID is never returned: portiye is a child of whatever shell or IDE
 /// started it, and a sweep that reaches upward must not take the app with it.
+///
+/// The `seen` set is what keeps this linear: a supervisor with a few hundred
+/// descendants was previously scanned end to end once per child.
 fn descendants(children_of: &HashMap<u32, Vec<u32>>, root: u32) -> Vec<u32> {
     let own = std::process::id();
+    let mut seen: HashSet<u32> = HashSet::from([root, own]);
     let mut out = Vec::new();
     let mut queue = vec![root];
     while let Some(pid) = queue.pop() {
         for &kid in children_of.get(&pid).into_iter().flatten() {
-            if kid == own || out.contains(&kid) {
+            if !seen.insert(kid) {
                 continue;
             }
             out.push(kid);
@@ -367,6 +371,12 @@ fn descendants(children_of: &HashMap<u32, Vec<u32>>, root: u32) -> Vec<u32> {
         }
     }
     out
+}
+
+/// A process list with no per-process extras: the kill paths need parents and
+/// the ability to signal, not CPU, memory, argv or working directories.
+fn process_tree() -> System {
+    System::new_with_specifics(RefreshKind::nothing().with_processes(ProcessRefreshKind::nothing()))
 }
 
 fn children_map(sys: &System) -> HashMap<u32, Vec<u32>> {
@@ -386,7 +396,7 @@ fn children_map(sys: &System) -> HashMap<u32, Vec<u32>> {
 /// process alive, reparented to init, still holding its port.
 #[tauri::command]
 pub fn kill_processes(pids: Vec<u32>) -> KillReport {
-    let sys = System::new_all();
+    let sys = process_tree();
     let children_of = children_map(&sys);
     let mut report = KillReport {
         elevation: elevation_hint(),
@@ -443,7 +453,7 @@ pub fn kill_processes_elevated(pids: Vec<u32>) -> Result<(), String> {
     }
     // The refused process almost certainly owns refused children too; asking
     // for the password twice for the same tree is the worse outcome.
-    let sys = System::new_all();
+    let sys = process_tree();
     let children_of = children_map(&sys);
     let mut pids = pids;
     let mut seen: HashSet<u32> = pids.iter().copied().collect();

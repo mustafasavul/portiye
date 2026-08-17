@@ -4,7 +4,7 @@
 //! panel is a deliberate act, so it can afford a moment.
 
 use serde::Serialize;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
 
 #[derive(Serialize, Clone, Debug, Default)]
 pub struct Relative {
@@ -93,7 +93,11 @@ fn lsof_for(pid: u32) -> Result<(Vec<String>, Vec<String>), String> {
 
 #[tauri::command]
 pub fn process_detail(pid: u32) -> Result<ProcessDetail, String> {
-    let mut sys = System::new_all();
+    // Processes only. `new_all` would also collect host CPU, memory and every
+    // mounted volume — none of which this panel shows.
+    let mut sys = System::new_with_specifics(
+        RefreshKind::nothing().with_processes(ProcessRefreshKind::everything()),
+    );
     // A second sample so cpu_usage is a rate rather than zero.
     std::thread::sleep(sysinfo::MINIMUM_CPU_UPDATE_INTERVAL);
     sys.refresh_processes(ProcessesToUpdate::All, true);
@@ -132,6 +136,8 @@ pub fn process_detail(pid: u32) -> Result<ProcessDetail, String> {
         })
         .collect();
 
+    let gpu = crate::gpu::per_process(pid);
+
     let (files, connections, lsof_error) = match lsof_for(pid) {
         Ok((f, c)) => (f, c, None),
         Err(e) => (Vec::new(), Vec::new(), Some(e)),
@@ -160,8 +166,8 @@ pub fn process_detail(pid: u32) -> Result<ProcessDetail, String> {
             .unwrap_or_default(),
         memory: proc.memory(),
         cpu: proc.cpu_usage(),
-        gpu: crate::gpu::per_process(pid).and_then(|g| g.sm),
-        gpu_memory: crate::gpu::per_process(pid).map(|g| g.memory).unwrap_or(0),
+        gpu: gpu.and_then(|g| g.sm),
+        gpu_memory: gpu.map(|g| g.memory).unwrap_or(0),
         disk: {
             let d = proc.disk_usage();
             let secs = sysinfo::MINIMUM_CPU_UPDATE_INTERVAL.as_secs_f64();

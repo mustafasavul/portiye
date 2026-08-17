@@ -228,9 +228,56 @@ pub struct SystemStats {
 }
 
 /// Whether the disk is measured. Off, the volume list is never enumerated —
-/// a `statfs` per mount is cheap, but "hidden" here means not run, not drawn
-/// in white-on-white.
+/// "hidden" here means not run, not drawn in white-on-white.
 static DISK: AtomicBool = AtomicBool::new(true);
+
+/// How often the volumes are actually measured.
+///
+/// Not every tick: enumerating them costs ~20ms on an APFS machine — four
+/// times the whole process refresh beside it — and free space does not move
+/// enough in five seconds to be worth that. Between reads the last answer is
+/// repeated, which is what a disk gauge means anyway.
+const DISK_EVERY: std::time::Duration = std::time::Duration::from_secs(60);
+
+/// `(measured at, total, used, mount)`.
+type DiskReading = (std::time::Instant, u64, u64, String);
+static DISK_CACHE: Mutex<Option<DiskReading>> = Mutex::new(None);
+
+/// The disk figures, measured at most once a minute.
+fn disk_usage() -> (u64, u64, String) {
+    if !DISK.load(Ordering::Relaxed) {
+        // Not merely stale — gone. Drop the cache so switching it back on
+        // measures rather than replaying whatever was true an hour ago.
+        if let Ok(mut cache) = DISK_CACHE.lock() {
+            *cache = None;
+        }
+        return (0, 0, String::new());
+    }
+
+    let mut cache = match DISK_CACHE.lock() {
+        Ok(c) => c,
+        Err(_) => return (0, 0, String::new()),
+    };
+    if let Some((at, total, used, name)) = cache.as_ref() {
+        if at.elapsed() < DISK_EVERY {
+            return (*total, *used, name.clone());
+        }
+    }
+
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let list = disks.list();
+    let chosen = primary_index(list.iter().map(|d| (d.total_space(), d.is_removable())));
+    let fresh = match chosen.and_then(|i| list.get(i)) {
+        Some(d) => (
+            d.total_space(),
+            d.total_space().saturating_sub(d.available_space()),
+            d.mount_point().to_string_lossy().into_owned(),
+        ),
+        None => (0, 0, String::new()),
+    };
+    *cache = Some((std::time::Instant::now(), fresh.0, fresh.1, fresh.2.clone()));
+    fresh
+}
 
 /// Pushed by the window from the settings page, like `set_gpu_enabled`.
 #[tauri::command]
@@ -264,26 +311,11 @@ fn measure(sys: &System) -> SystemStats {
     let memory_total = sys.total_memory();
     let memory_used = memory_total.saturating_sub(sys.available_memory());
 
-    // Disks are not part of the port scan, so they are enumerated here — a
-    // statfs per mount, unlike the `simctl`/`docker` subprocesses that had to
-    // be moved off this tick. Switched off, not even that runs; zero total is
-    // the same answer a machine with no fixed volume gives, and both hide the
-    // row rather than showing a made-up one.
-    let (disk_total, disk_used, disk_name) = if DISK.load(Ordering::Relaxed) {
-        let disks = sysinfo::Disks::new_with_refreshed_list();
-        let list = disks.list();
-        let chosen = primary_index(list.iter().map(|d| (d.total_space(), d.is_removable())));
-        match chosen.and_then(|i| list.get(i)) {
-            Some(d) => (
-                d.total_space(),
-                d.total_space().saturating_sub(d.available_space()),
-                d.mount_point().to_string_lossy().into_owned(),
-            ),
-            None => (0, 0, String::new()),
-        }
-    } else {
-        (0, 0, String::new())
-    };
+    // Disks are not part of the port scan, so they are read here — on their own
+    // slow cadence, unlike everything else in this function. Zero total is the
+    // same answer a machine with no fixed volume gives, and both hide the row
+    // rather than showing a made-up one.
+    let (disk_total, disk_used, disk_name) = disk_usage();
 
     SystemStats {
         cpu: sys.global_cpu_usage(),
@@ -320,6 +352,22 @@ mod tests {
             family: pid,
             lan: false,
         }
+    }
+
+    /// Off means no reading at all, and the stale one is dropped with it —
+    /// switching it back on must measure rather than replay.
+    #[test]
+    fn the_disk_is_read_on_its_own_cadence() {
+        DISK.store(true, Ordering::Relaxed);
+        let first = disk_usage();
+        // Inside the window: the same answer, and no second enumeration.
+        assert_eq!(disk_usage(), first);
+        assert!(DISK_CACHE.lock().unwrap().is_some());
+
+        DISK.store(false, Ordering::Relaxed);
+        assert_eq!(disk_usage(), (0, 0, String::new()));
+        assert!(DISK_CACHE.lock().unwrap().is_none());
+        DISK.store(true, Ordering::Relaxed);
     }
 
     #[test]

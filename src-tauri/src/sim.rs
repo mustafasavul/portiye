@@ -4,7 +4,6 @@
 //! and we return an empty list instead of an error, so the UI stays quiet.
 
 use serde::Serialize;
-use std::process::Command;
 
 #[derive(Serialize, Clone, Debug)]
 pub struct Simulator {
@@ -15,7 +14,7 @@ pub struct Simulator {
 }
 
 fn simctl(args: &[&str]) -> Result<Vec<u8>, String> {
-    let out = Command::new("xcrun")
+    let out = crate::ports::cmd("xcrun")
         .arg("simctl")
         .args(args)
         .output()
@@ -78,7 +77,7 @@ pub fn list_simulators() -> Result<Vec<Simulator>, String> {
 pub fn boot_simulator(udid: String) -> Result<(), String> {
     simctl(&["boot", &udid])?;
     // Bring Simulator.app to the front so the booted device is actually visible.
-    let _ = Command::new("open").args(["-a", "Simulator"]).spawn();
+    let _ = crate::ports::cmd("open").args(["-a", "Simulator"]).spawn();
     Ok(())
 }
 

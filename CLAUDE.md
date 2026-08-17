@@ -72,6 +72,20 @@ here. Move it to a file only if these need to be hand-edited or synced.
 **Auto-kill is a saved *sweep*, not a background rule.** It matches on demand
 and always shows the confirmation. Nothing is ever killed silently.
 
+**Nothing on the main thread may shell out.** The tray menu is rebuilt on
+every port tick, on the main thread (macOS requires it), and it used to call
+`list_avds` + `list_simulators` while it was there — `simctl list` is ~0.8s, so
+the menu bar froze for a fifth of every five seconds. Device rows are now
+scanned on their own 30s thread into a cache that `build_menu` only reads. The
+rebuild itself stays every tick: it is microseconds, and it keeps the memory
+figures in the submenu honest.
+
+**Disk is read once a minute, not once a tick.** `Disks::new_with_refreshed_list()`
+costs ~20ms on APFS — four times the whole process refresh beside it — and free
+space does not move in five seconds. `watch::disk_usage` repeats the last
+reading in between; switching the setting off drops the cache rather than
+replaying it later.
+
 **The tray is four items tall, not one per PID.** A flat item per listening
 process unrolled the menu past the bottom of the screen on any machine with a
 few dev servers up. Ports and devices each live in a submenu; ports group into
@@ -222,6 +236,10 @@ The established pattern, and it catches real bugs:
 ## Known gaps
 
 - The tray's device entries were verified by test, not by eye.
+- Measured on one Mac (488 processes): `lsof` 35ms, `refresh_all` 5.4ms,
+  volumes 20ms, `ioreg` 19.5ms, `simctl list` 778ms. Narrowing `refresh_all`
+  to a `RefreshKind` saves ~1ms and was **not** worth the noise — the win was
+  in what runs at all, not in how it is asked for.
 - Notifications need a real takeover or a crossed threshold to observe; not yet
   seen firing in anger.
 - GitHub Actions runs `npm run build`, `cargo fmt --check`, `cargo clippy -D
