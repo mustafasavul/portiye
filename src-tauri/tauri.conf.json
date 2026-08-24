@@ -45,6 +45,11 @@
         "depends": [
           "lsof"
         ]
+      },
+      "rpm": {
+        "depends": [
+          "lsof"
+        ]
       }
     }
   }

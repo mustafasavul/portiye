@@ -12,7 +12,7 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 31 tests (29 on Windows — two need a unix fixture)
+cd src-tauri && cargo test # 38 tests (36 on Windows — two need a unix fixture)
 npm run check              # locale keys, placeholders, version triple
 ```
 
@@ -27,7 +27,7 @@ Vite alone (`npm run dev`) renders in Chromium — useful for fast UI work, but
 
 | File | Owns |
 |---|---|
-| `watch.rs` | **The single poller.** Scans every 5s, diffs snapshots, keeps history, fires notifications, emits `ports-changed`. Everything else reads its cache. Also serves host CPU / RAM / disk off the same `System`. |
+| `watch.rs` | **The single poller.** Scans every 5s, diffs snapshots, keeps history, emits `ports-changed`. Everything else reads its cache. Also serves host CPU / RAM / disk off the same `System`. |
 | `ports.rs` | `scan()` (lsof / netstat + sysinfo), the `detail_for` labels, family grouping, kill + elevation |
 | `gpu.rs` | Whole-machine GPU load, one source per platform. `None` where there is none |
 | `runtimes.rs` | Docker / Ollama / JVM daemons — same row shape as devices |
@@ -225,8 +225,9 @@ iterating, so any member arriving before the root was silently dropped. Gather
 members, then choose.
 
 **A restart is not a port conflict.** Same process name reclaiming its own port
-is normal; only a *different* process taking it within 30s is an event worth a
-notification.
+is normal; only a *different* process taking it within 30s is recorded as a
+`"taken"` event. There is no OS notification — the History tab is the whole
+surface.
 
 ---
 
@@ -255,8 +256,6 @@ The established pattern, and it catches real bugs:
   volumes 20ms, `ioreg` 19.5ms, `simctl list` 778ms. Narrowing `refresh_all`
   to a `RefreshKind` saves ~1ms and was **not** worth the noise — the win was
   in what runs at all, not in how it is asked for.
-- Notifications need a real takeover or a crossed threshold to observe; not yet
-  seen firing in anger.
 - GitHub Actions runs `npm run build`, `cargo fmt --check`, `cargo clippy -D
   warnings` and `cargo test` on macOS, Linux and Windows. Nothing runs the UI.
 - **Windows can be checked locally after all.** The `llvm-rc` that

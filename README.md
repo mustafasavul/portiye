@@ -81,16 +81,30 @@ Download the installer for your platform from
 
 | Platform | File | Notes |
 |---|---|---|
-| macOS (Apple silicon & Intel) | `.dmg` | Not notarised yet — see below |
-| Windows 10 / 11 | `.msi` or `.exe` | |
-| Linux | `.AppImage`, `.deb`, `.rpm` | needs `lsof` |
+| macOS 10.13+ (Apple silicon & Intel) | `.dmg` | Unsigned — see below |
+| Windows 10 / 11 | `.msi` or `-setup.exe` | Unsigned — see below |
+| Linux | `.deb`, `.rpm`, `.AppImage` | needs `lsof` |
 
-macOS first launch: right-click the app → **Open**, or clear the quarantine
-flag yourself:
+The builds are not code-signed: signing certificates cost money per year and
+this app takes none. Every release is built in the open by
+[`release.yml`](.github/workflows/release.yml) from the tag you can read, so
+you can also just [build it yourself](#build-from-source).
+
+**macOS.** Gatekeeper will refuse the first launch. On macOS 15 (Sequoia) and
+later, open it once, then go to **System Settings → Privacy & Security** and
+click **Open Anyway**. On macOS 14 and earlier, right-click the app →
+**Open**. Either way, this also works:
 
 ```bash
 xattr -dr com.apple.quarantine /Applications/portiye.app
 ```
+
+**Windows.** SmartScreen shows "Windows protected your PC" — click
+**More info → Run anyway**.
+
+**Linux.** `.deb` and `.rpm` pull in `lsof` themselves. The `.AppImage` cannot
+declare dependencies, so install `lsof` first (`apt install lsof`,
+`dnf install lsof`, `pacman -S lsof`) — without it the port list stays empty.
 
 Prefer to build it? See [Build from source](#build-from-source).
 
