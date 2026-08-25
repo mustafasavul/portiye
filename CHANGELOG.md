@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1]
+
+### Fixed
+
+- **The `.rpm` installed without `lsof`.** Only the `.deb` declared the
+  dependency, and Linux's scan has no fallback — so on Fedora and RHEL the
+  port list came back empty with no explanation. The `.rpm` now declares it
+  too.
+- **`@tauri-apps/plugin-notification` was a dependency that did nothing**: no
+  Rust plugin, no capability grant, no call site. Removed.
+
+### Changed
+
+- **Install docs now match the platforms.** macOS 15 dropped the
+  right-click → Open path, so Privacy & Security → Open Anyway is documented
+  beside it; Windows' SmartScreen prompt and the `-setup.exe` filename were
+  undocumented; and the `.AppImage` cannot declare dependencies, so it now
+  says to install `lsof` first. Why the builds are unsigned is stated outright
+  rather than left as a footnote.
+- `harness.html`, the stubbed-bridge verification page, is documented in
+  CONTRIBUTING instead of sitting unexplained in the repository root.
+- The window carried Vite's scaffolding title and favicon.
+
 ## [0.5.0]
 
 ### Added
