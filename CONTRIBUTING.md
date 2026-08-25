@@ -39,6 +39,13 @@ headers — so CI is the only Linux check.
   `window.confirm` returns without showing anything in the Tauri webview, which
   is why `Confirm.tsx` exists. Never reach for `window.confirm` or
   `window.prompt`.
+- **`harness.html` is there for this.** Open it with `npm run dev` at
+  [/harness.html](http://localhost:1420/harness.html): it stubs
+  `window.__TAURI_INTERNALS__.invoke` with fixtures, records every command
+  call in `window.__calls`, and sabotages `window.confirm` / `window.prompt`
+  into returning `undefined` the way the Tauri webview does. Cancel, Esc and
+  a backdrop click must each leave `window.__calls` empty; confirming must
+  send exactly the PIDs the dialog named.
 - **Add a test for logic, not for plumbing.** Parsers, diffing, family roots
   and CSV escaping have Rust tests. One runnable check that fails if the logic
   breaks is enough.
