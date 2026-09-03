@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows
 - `harness.html`, the stubbed-bridge verification page, is documented in
   CONTRIBUTING instead of sitting unexplained in the repository root.
 - The window carried Vite's scaffolding title and favicon.
+- **The `.dmg` no longer opens with a licence agreement.** `licenseFile`
+  turned MIT into a click-through EULA that had to be accepted before the
+  disk image would even mount — two dialogs deep before reaching the app, on
+  a permissive licence that already ships inside the bundle and the
+  repository.
 
 ## [0.5.0]
 
