@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **An icon of its own.** The app shipped with Tauri's default logo in the
+  Dock, the DMG, the taskbar and the menu bar. It now carries the wordmark's
+  own mark — a Space Grotesk `p` and the accent dot — as a plate for the
+  desktop and, separately, as a flat monochrome template for the macOS menu
+  bar, which keeps only the alpha channel and would have rendered the plate
+  as a filled square.
+- Screenshots in the README, and the wordmark as SVG in both themes.
+
 ## [0.5.1]
 
 ### Fixed

@@ -452,8 +452,14 @@ pub fn init<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
         std::thread::sleep(DEVICE_POLL);
     });
 
+    // A dedicated monochrome mark, not the window icon: `icon_as_template`
+    // keeps only the alpha channel, so the app icon's plate would flatten into
+    // a filled square in the menu bar. This one is the glyph alone, which is
+    // what macOS tints for light and dark.
+    let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(app.default_window_icon().unwrap().clone())
+        .icon(tray_icon)
         .icon_as_template(true) // macOS menu bar: adapt to light/dark
         .menu(&build_menu(app)?)
         .show_menu_on_left_click(true)
