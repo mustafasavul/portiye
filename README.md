@@ -1,10 +1,23 @@
-# portiye — find what's using a port, and stop it
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/wordmark-dark.svg">
+    <img src="docs/wordmark-light.svg" alt="portiye" width="220">
+  </picture>
+</p>
 
-[![CI](https://github.com/mustafasavul/portiye/actions/workflows/ci.yml/badge.svg)](https://github.com/mustafasavul/portiye/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Built with Tauri](https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg)](https://tauri.app)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](#install)
-[![Languages](https://img.shields.io/badge/languages-28-informational.svg)](#languages)
+<h1 align="center">Find what's using a port, and stop it</h1>
+
+<p align="center">
+  <a href="https://github.com/mustafasavul/portiye/actions/workflows/ci.yml"><img src="https://github.com/mustafasavul/portiye/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB.svg" alt="Built with Tauri 2"></a>
+  <a href="#install"><img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg" alt="Platforms"></a>
+  <a href="#languages"><img src="https://img.shields.io/badge/languages-28-informational.svg" alt="Languages"></a>
+</p>
+
+<p align="center">
+  <img src="docs/ports-light.png" alt="The Ports tab: devices, system gauges, and every listening port with the process and project behind it" width="900">
+</p>
 
 **portiye is a free, open-source, cross-platform desktop app that shows every
 listening port on your computer, which process owns it, and which project that
@@ -53,6 +66,9 @@ running from yesterday.
   tree down — no orphaned server left holding the port.
 - **Says who owns it.** The `.app` bundle, the AVD, or the project directory a
   process was started from. `~/dev/shop` beats a bare `node`.
+
+  <img src="docs/ports-dark.png" alt="Ports nested under the process that started them: an IDE, its language servers and its helper, each on its own port" width="900">
+
 - **Fast Kill.** One click clears every stray `node`, `python`, JVM, .NET, Go,
   Ruby, PHP, Rust or Dart process, with a confirmation that names each one.
 - **Guardrails before anything dies.** Databases (`postgres`, `mysqld`,
@@ -63,6 +79,9 @@ running from yesterday.
   says which one is about to ask.
 - **Port history.** What opened, what closed, and when a *different* process
   took a port over — recorded while the window is closed.
+
+  <img src="docs/history.png" alt="The History tab: ports opening and closing over time, filterable by event" width="900">
+
 - **Emulators, simulators, containers, daemons.** Android AVDs, iOS
   simulators, Docker containers, Ollama models and JVM build daemons: start,
   stop, restart, wipe.
@@ -73,6 +92,26 @@ running from yesterday.
 - **Start at login**, toggled from the toolbar.
 - **No telemetry, no account, no network calls.** It reads your machine and
   that is all.
+
+### The window is optional
+
+portiye lives in the menu bar. The load readout, the listening ports grouped
+into families, and the devices are all reachable — and killable — without
+opening anything.
+
+<p align="center">
+  <img src="docs/tray.png" alt="The menu bar menu: a one-line CPU, GPU, RAM and disk readout above the ports and devices submenus" width="420">
+</p>
+
+### Everything can be switched off
+
+A gauge that is off is never measured: GPU off means no probe on the scan tick
+and no `nvidia-smi` sampler, devices off means `simctl`, `adb` and `docker` are
+never run at all.
+
+<p align="center">
+  <img src="docs/settings.png" alt="The Settings tab: switches for every panel, column, gauge and menu bar element" width="900">
+</p>
 
 ## Install
 
