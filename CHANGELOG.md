@@ -24,6 +24,13 @@ All notable changes to this project are documented here. The format follows
 - CI actions moved off the Node 20 runtime GitHub is retiring:
   `actions/checkout` and `actions/setup-node` to v7, `tauri-action` to v1.
 
+### Fixed
+
+- A flaky i18n test. Two tests moved the same process-wide locale slot while
+  `cargo test` ran them in parallel, so one's `set("en")` could land between
+  the other's `set` and its assertion — reproduced at roughly one run in seven,
+  and it turned CI red on an unrelated commit.
+
 ## [0.5.2]
 
 ### Added

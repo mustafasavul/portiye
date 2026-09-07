@@ -708,8 +708,20 @@ pub fn set_locale<R: tauri::Runtime>(app: tauri::AppHandle<R>, locale: String) {
 mod tests {
     use super::*;
 
+    /// `LOCALE` is one process-wide slot, and `cargo test` runs these threads
+    /// in parallel: without this, one test's `set("en")` lands between another
+    /// test's `set` and its assertion. That raced roughly one run in seven.
+    /// Poisoning is recovered rather than propagated, so a genuine failure in
+    /// one test reports itself instead of turning the others into noise.
+    static LOCALE_LOCK: Mutex<()> = Mutex::new(());
+
+    fn locale_guard() -> std::sync::MutexGuard<'static, ()> {
+        LOCALE_LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     #[test]
     fn region_tags_collapse_and_unknown_tags_are_ignored() {
+        let _guard = locale_guard();
         set("tr-TR");
         assert_eq!(t("tray.quit"), "Çık");
         set("zh_Hans_CN");
@@ -722,6 +734,7 @@ mod tests {
 
     #[test]
     fn an_unknown_key_is_empty_rather_than_a_panic() {
+        let _guard = locale_guard();
         set("tr");
         assert_eq!(t("tray.nope"), "");
         set("en");
