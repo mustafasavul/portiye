@@ -21,6 +21,8 @@ All notable changes to this project are documented here. The format follows
 - Node 24 in CI, and `engines` set to `>=22.18`: the new test imports the
   TypeScript directly rather than keeping a second copy of the rule table, and
   type stripping landed in 22.18.
+- CI actions moved off the Node 20 runtime GitHub is retiring:
+  `actions/checkout` and `actions/setup-node` to v7, `tauri-action` to v1.
 
 ## [0.5.2]
 
