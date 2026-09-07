@@ -302,7 +302,7 @@ working app. Translation fixes are the easiest contribution to make here.
 
 ## Build from source
 
-Prerequisites: [Rust](https://rustup.rs), Node 20+, and the
+Prerequisites: [Rust](https://rustup.rs), Node 24+, and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/) for your
 platform.
 

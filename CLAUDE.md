@@ -245,7 +245,13 @@ The established pattern, and it catches real bugs:
 4. **Then the real Tauri window.** Chromium is not the shipping engine.
 5. **Rust tests for pure logic** — parsers, snapshot diffing, family roots, CSV
    escaping. `kill_processes` is tested against a `sleep` child we spawned.
-6. **320 / 768 / 1180 px, light and dark.** `scrollWidth === clientWidth`.
+6. **`scripts/risk.test.mjs` for the kill warnings.** The one piece of frontend
+   logic whose regression costs data rather than pixels: drop a row from
+   `RULES` and `postgres` silently gets the same dialog as a stray `node`.
+   Node imports `src/risk.ts` directly by stripping the types — no runner, no
+   dependency, and no second copy of the table to drift. That is what pins the
+   floor to Node 22.18; `npm run check` runs it, so CI already does.
+7. **320 / 768 / 1180 px, light and dark.** `scrollWidth === clientWidth`.
 
 ---
 

@@ -4,6 +4,24 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **A test for the kill warnings.** `src/risk.ts` decides whether killing
+  `postgres`, an IDE or an OS service gets an explicit warning first, and
+  nothing checked that it still did — the Rust suite is all backend and there
+  is no browser runner here. `scripts/risk.test.mjs` asserts all five rule
+  families still match, that ordinary dev processes still do not, and that
+  every warning key exists in `en.ts`, where a typo would print the raw key
+  into the dialog. It runs inside `npm run check`, so CI runs it.
+
+### Changed
+
+- Node 24 in CI, and `engines` set to `>=22.18`: the new test imports the
+  TypeScript directly rather than keeping a second copy of the rule table, and
+  type stripping landed in 22.18.
+
 ## [0.5.2]
 
 ### Added

@@ -5,7 +5,7 @@ requests are all welcome.
 
 ## Getting set up
 
-Prerequisites: [Rust](https://rustup.rs), Node 20+, and the
+Prerequisites: [Rust](https://rustup.rs), Node 24+, and the
 [Tauri system dependencies](https://tauri.app/start/prerequisites/).
 
 ```bash
@@ -15,7 +15,7 @@ npm run tauri dev
 
 ```bash
 npm run build              # tsc + vite
-npm run check              # locale keys, placeholders, version
+npm run check              # locale keys, placeholders, version, kill warnings
 cd src-tauri && cargo test
 cd src-tauri && cargo fmt && cargo clippy --all-targets -- -D warnings
 ```
@@ -47,8 +47,12 @@ headers — so CI is the only Linux check.
   a backdrop click must each leave `window.__calls` empty; confirming must
   send exactly the PIDs the dialog named.
 - **Add a test for logic, not for plumbing.** Parsers, diffing, family roots
-  and CSV escaping have Rust tests. One runnable check that fails if the logic
-  breaks is enough.
+  and CSV escaping have Rust tests; the kill-warning table has
+  `scripts/risk.test.mjs`. One runnable check that fails if the logic breaks is
+  enough.
+- **Touching `src/risk.ts`?** That table is the only thing standing between a
+  bulk kill and someone's database. `npm run check` asserts every rule still
+  matches and that ordinary dev processes still do not.
 - **Keep the diff small.** One change per pull request.
 - **Read [CLAUDE.md](CLAUDE.md)** — it records the decisions that already have
   an answer and the traps that already cost someone a day.
