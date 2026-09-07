@@ -224,6 +224,17 @@ inside that branch. Check the Windows target locally before pushing — see
 iterating, so any member arriving before the root was silently dropped. Gather
 members, then choose.
 
+**Global state plus parallel tests is a coin flip, not a test.** `i18n::LOCALE`
+is one process-wide `Mutex<Table>`, and `cargo test` runs test functions on
+their own threads: two tests that both called `set()` had one's `set("en")`
+landing between the other's `set("zh_Hans_CN")` and the assertion after it.
+It failed 45 times in 300 runs at `--test-threads=8` — which is to say it was
+broken for months and CI kept winning the toss, then lost it on an unrelated
+commit. A test-only `Mutex` taken by both is the fix; do not reshape the real
+code to suit the test, and recover poisoning with `into_inner()` so one genuine
+failure does not turn its neighbour into a second, confusing one. Anything else
+reaching for a `static` needs the same guard.
+
 **A restart is not a port conflict.** Same process name reclaiming its own port
 is normal; only a *different* process taking it within 30s is recorded as a
 `"taken"` event. There is no OS notification — the History tab is the whole
