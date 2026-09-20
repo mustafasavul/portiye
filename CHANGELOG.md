@@ -4,6 +4,55 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0]
+
+### Added
+
+- **portiye now names the AI tools on your machine.** A listening process that
+  belongs to one — Ollama, llama.cpp, LM Studio, vLLM, ComfyUI, an MCP server,
+  Claude, Codex, Antigravity, Cursor, Copilot — carries its name as a badge in
+  the port table. The name comes from argv, the directory the process was
+  started in, or a port the tool always binds, never from reading anyone's
+  memory maps: those cost a subprocess or a privileged read per pid per tick.
+  Anything less certain than those three signals gets no badge, and the
+  platform's own services are excluded outright, because macOS ships a
+  `CursorUIViewService` and a system path with "codex" in it.
+- **An AI tools panel, because an agent has no port.** Codex, Claude Code and
+  most assistants never listen on anything — they hold one outbound connection
+  and fork `git`, `rg` and compilers — so the port table could never show them.
+  The new panel lists one row per *tool*, not per process: name, agent or local
+  model, how many processes, how much memory, the ports it holds if it holds
+  any. Opening a row lists the processes behind it. Stopping one goes through
+  the same confirmation, child sweep and elevated retry as every other kill.
+- **Model files in the process detail panel.** The `.gguf`, `.safetensors`,
+  `.onnx` and `.pt` weights a process holds open, picked out of the `lsof` the
+  panel already runs. It is what explains an 18 GB `python`.
+- **A warning before killing an agent.** A coding agent runs as a plain `node`
+  or `python`, so no name rule could find it; the confirmation now reads the
+  tool's name instead, and says that killing it mid-task leaves its edits half
+  applied. Local model servers deliberately get no warning: stopping Ollama
+  frees the GPU and loses nothing.
+
+### Changed
+
+- **Devices and AI tools share one panel and a tab strip, and the closed tab is
+  not fetched at all.** Not a display trick: the device lists are three
+  subprocesses and `simctl list` alone is 0.8s, so a tab nobody opened now runs
+  nothing. The tray's device submenu still forces its own fetch, and switching
+  tabs leaves the other list in state so the Device Logs tab keeps its picker.
+- The gauges pack two-up on a narrow window instead of stacking four deep.
+  Every one of those pixels came off the port table.
+
+### Fixed
+
+- **The port table could not be scrolled on a narrow window.** Two device
+  panels at 40vh each, plus gauges wrapped four deep, left the table a few
+  pixels tall — scrollable in principle, unusable in fact. Everything above the
+  table is now one fixed shelf with a capped device list, and exactly one thing
+  on the screen scrolls: the table.
+- Rows that open now look like it. The disclosure is a bordered caret that
+  turns, the whole name is the target, and hovering tints both.
+
 ## [0.5.3]
 
 ### Added
