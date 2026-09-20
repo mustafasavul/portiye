@@ -33,6 +33,9 @@ export type PortEntry = {
   family: number;
   /** Bound past loopback: reachable from a phone on the same network. */
   lan: boolean;
+  /** The AI tool behind this listener — "Ollama", "vLLM", "Claude" — or null
+   *  when nothing on the machine says one is there. */
+  ai: string | null;
 };
 
 /** One process, with every port it holds. */
@@ -48,6 +51,7 @@ export type Proc = {
   ports: number[];
   /** The subset of `ports` other devices on the LAN can reach. */
   lanPorts: number[];
+  ai: string | null;
 };
 
 /** A process and its listening descendants — `emulator` + the `qemu` it spawned. */
@@ -81,6 +85,24 @@ export type Simulator = {
   runtime: string;
 };
 
+/** One process behind an AI tool. */
+export type AiProc = { pid: number; name: string; memory: number };
+
+/**
+ * An AI tool as one row, not one row per process: Codex alone is a dozen
+ * Electron helpers. Most agents listen on nothing at all, which is why they
+ * have a panel of their own instead of a line in the port table.
+ */
+export type AiTool = {
+  name: string;
+  /** "agent" or "model" — the window translates it. */
+  kind: string;
+  memory: number;
+  cpu: number;
+  procs: AiProc[];
+  ports: number[];
+};
+
 /** Docker containers, Ollama models, JVM build daemons — whatever is present. */
 export type RuntimeItem = {
   id: string;
@@ -112,6 +134,9 @@ export type Device = {
   reset: (() => Promise<void>) | null;
   resetLabel: string;
   resetWarning: string;
+  /** The processes behind this row, revealed when it is opened. An AI tool is
+   *  a dozen of them; an emulator is one thing and has none. */
+  members?: AiProc[];
 };
 
 export type SortKey =
@@ -163,6 +188,8 @@ export const thresholdLabel = (mb: number) =>
  */
 export type Panels = {
   devices: boolean;
+  /** Agents and local model servers, ports or no ports. */
+  ai: boolean;
   system: boolean;
   cpu: boolean;
   /** Not display-only: off, the Rust side stops measuring the GPU. */
@@ -182,6 +209,7 @@ export type TrayOptions = {
 
 export const DEFAULT_PANELS: Panels = {
   devices: true,
+  ai: true,
   system: true,
   cpu: true,
   gpu: true,

@@ -60,6 +60,19 @@ impl Watch {
             inner: Mutex::new(Inner::default()),
         }
     }
+
+    /// Borrow the poller's own `System`. Anything that wants per-process
+    /// figures reads through here rather than building its own: this is the
+    /// instance with two samples behind it, and a second one would be the
+    /// two-pollers mistake again.
+    pub fn with_system<T>(&self, f: impl FnOnce(&System) -> T) -> T {
+        f(&self.system.lock().unwrap())
+    }
+
+    /// The last scan, cloned. Same cached read `get_listening_ports` serves.
+    pub fn ports(&self) -> Vec<PortEntry> {
+        self.inner.lock().unwrap().ports.clone()
+    }
 }
 
 fn now_ms() -> u64 {
@@ -188,7 +201,7 @@ pub fn start<R: Runtime>(app: &AppHandle<R>) {
 /// `ports-changed` and calls this.
 #[tauri::command]
 pub fn get_listening_ports(watch: tauri::State<Watch>) -> Vec<PortEntry> {
-    watch.inner.lock().unwrap().ports.clone()
+    watch.ports()
 }
 
 #[tauri::command]
@@ -351,6 +364,7 @@ mod tests {
             gpu_memory: 0,
             family: pid,
             lan: false,
+            ai: None,
         }
     }
 

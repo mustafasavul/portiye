@@ -22,6 +22,7 @@ import { CloseIcon } from "./icons";
 import { DEFAULT_PANELS, DEFAULT_TRAY, defaultDir, mb } from "./types";
 import type { Key } from "./i18n";
 import type {
+  AiTool,
   Avd,
   Device,
   Family,
@@ -44,6 +45,13 @@ export default function App() {
   const [avds, setAvds] = useState<Avd[]>([]);
   const [sims, setSims] = useState<Simulator[]>([]);
   const [runtimes, setRuntimes] = useState<RuntimeItem[]>([]);
+  const [aiTools, setAiTools] = useState<AiTool[]>([]);
+  /** Which list the shared panel shows. The other one is not fetched at all —
+   *  that is the point of the strip, not just less on screen. */
+  const [toolTab, setToolTab] = usePersisted<"devices" | "ai">(
+    "toolTab",
+    "devices",
+  );
   const [ports, setPorts] = useState<PortEntry[]>([]);
   const [system, setSystem] = useState<SystemStats | null>(null);
   /** This machine's LAN address, or null when it is on no network. */
@@ -104,8 +112,11 @@ export default function App() {
     }).catch(() => {});
   }, [tray.visible, tray.stats, tray.ports, tray.devices]);
 
-  /** Who still wants the device lists: the panel, or the tray's submenu. */
-  const wantDevices = panels.devices || tray.devices;
+  /** Who still wants the device lists: the open tab, or the tray's submenu.
+   *  A tab nobody opened costs nothing — `simctl list` is 0.8s. */
+  const wantDevices =
+    (panels.devices && toolTab === "devices") || tray.devices;
+  const wantAi = panels.ai && toolTab === "ai";
 
   /**
    * Ports only. This is a cached read on the Rust side — the watcher already
@@ -138,10 +149,21 @@ export default function App() {
     // to `simctl` every 30 seconds would be hiding the cost, not
     // removing it — and the Device Logs tab goes with them, because its picker
     // is these same lists.
-    if (!wantDevices) {
+    // Switched off entirely — not merely on the other tab, which keeps its
+    // last list so the Device Logs tab does not lose its picker mid-session.
+    if (!panels.devices && !tray.devices) {
       setAvds([]);
       setSims([]);
       setRuntimes([]);
+    }
+
+    // This one shells out to nothing: it walks the process list the poller
+    // refreshed a moment ago. It still waits for its tab, because a tool
+    // starting up is not a five-second question either.
+    if (wantAi) {
+      setAiTools(await invoke<AiTool[]>("list_ai_tools").catch(() => []));
+    } else if (!panels.ai) {
+      setAiTools([]);
     }
 
     // This machine's address is not device work, and the toolbar shows it
@@ -167,7 +189,7 @@ export default function App() {
     // on the next good pass rather than waiting for an unrelated port tick.
     const failed = [a, s, r].find((x) => x.status === "rejected");
     setError(failed ? String(failed.reason) : null);
-  }, [wantDevices]);
+  }, [wantDevices, wantAi, panels.ai, panels.devices, tray.devices]);
 
   // The tray menu is drawn in Rust and cannot read the webview's dictionary,
   // so the chosen language is pushed to it. Rebuilding the menu is the whole
@@ -307,7 +329,9 @@ export default function App() {
     const q = filter.trim().toLowerCase();
     const rows = q
       ? ports.filter((p) =>
-          `${p.port} ${p.name} ${p.detail}`.toLowerCase().includes(q),
+          `${p.port} ${p.name} ${p.detail} ${p.ai ?? ""}`
+            .toLowerCase()
+            .includes(q),
         )
       : ports;
 
@@ -332,6 +356,7 @@ export default function App() {
           ports: [p.port],
           lanPorts: p.lan ? [p.port] : [],
           family: p.family,
+          ai: p.ai,
         });
     }
     for (const proc of procs.values()) {
@@ -441,7 +466,7 @@ export default function App() {
         procs,
         memory: procs.reduce((sum, p) => sum + p.memory, 0),
         // A runtime sweep is only as risky as the riskiest thing in it.
-        warning: procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
+        warning: procs.map((p) => warningFor(p.name, p.ai)).find(Boolean) ?? null,
       }));
 
     const byName = build(bucket((p) => p.name), "name");
@@ -505,7 +530,14 @@ export default function App() {
       // The detail line is what makes a bulk kill safe to approve: it says
       // which project or app each PID actually belongs to.
       lines: procs.map((p) => ({
-        primary: `${p.name} · pid ${p.pid} · :${p.ports.join(", :")} · ${mb(p.memory)}`,
+        primary: [
+          p.name,
+          `pid ${p.pid}`,
+          p.ports.length ? `:${p.ports.join(", :")}` : null,
+          mb(p.memory),
+        ]
+          .filter(Boolean)
+          .join(" · "),
         secondary: p.detail || undefined,
       })),
       warning: warning && t(warning),
@@ -569,9 +601,81 @@ export default function App() {
         ? t("kill.titleSelectedOne")
         : t("kill.titleSelected", { n: procs.length }),
       procs,
-      procs.map((p) => warningFor(p.name)).find(Boolean) ?? null,
+      procs.map((p) => warningFor(p.name, p.ai)).find(Boolean) ?? null,
     );
   };
+
+  /**
+   * The AI panel's rows, in the shape every other panel already uses: a thing
+   * that is running, one line of identity, one action. One row per tool rather
+   * than per process — Codex alone is a dozen Electron helpers, and stopping
+   * it means stopping all of them, which is exactly what the row does.
+   */
+  const aiDevices: Device[] = aiTools.map((tool) => {
+    const id = `ai:${tool.name}`;
+    // `killMany` wants processes; these hold no ports of their own, which the
+    // confirmation prints around rather than filling in with a bare colon.
+    const procs: Proc[] = tool.procs.map((p) => ({
+      pid: p.pid,
+      name: p.name,
+      detail: "",
+      memory: p.memory,
+      cpu: 0,
+      disk: 0,
+      gpu: null,
+      gpuMemory: 0,
+      ports: [],
+      lanPorts: [],
+      ai: tool.name,
+    }));
+
+    return {
+      id,
+      name: tool.name,
+      platform: t(tool.kind === "agent" ? "ai.agent" : "ai.model"),
+      meta: [
+        t(tool.procs.length === 1 ? "ai.oneProcess" : "ai.processes", {
+          n: tool.procs.length,
+        }),
+        mb(tool.memory),
+        // Rounds to nothing on an idle tool; a permanent "0%" would read as a
+        // broken gauge rather than an idle agent.
+        tool.cpu >= 1 ? `${Math.round(tool.cpu)}%` : null,
+        tool.ports.length ? tool.ports.map((p) => `:${p}`).join(" ") : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      running: true,
+      toggleLabel: t("device.stop"),
+      // Through the one kill path: same confirmation, same child sweep, same
+      // elevated retry as every other kill in the app.
+      toggle: () =>
+        killMany(
+          id,
+          t("ai.stopTitle", { name: tool.name }),
+          procs,
+          tool.kind === "agent" ? "risk.agent" : null,
+        ),
+      restart: null,
+      reset: null,
+      resetLabel: "",
+      resetWarning: "",
+      // Opened, the row lists the processes it would stop.
+      members: tool.procs,
+    };
+  });
+
+  /** Only the panels that are switched on; one of them is a heading, not a
+   *  strip, and a tab switched off in Settings hands the panel to the other. */
+  const toolTabs = [
+    panels.devices && { id: "devices", label: t("devices.title") },
+    panels.ai && { id: "ai", label: t("ai.title") },
+  ].filter(Boolean) as { id: string; label: string }[];
+
+  useEffect(() => {
+    if (!toolTabs.some((tab) => tab.id === toolTab) && toolTabs[0])
+      setToolTab(toolTabs[0].id as "devices" | "ai");
+  }, [toolTabs, toolTab, setToolTab]);
 
   const exportSnapshot = async () => {
     try {
@@ -703,43 +807,51 @@ export default function App() {
 
       {view === "ports" && (
       <>
-      {panels.devices && (
-        <>
-          <DevicePanel
-            title={t("devices.title")}
-            devices={devices}
-            busy={busy}
-            run={run}
-            ask={ask}
-            empty={t("devices.empty")}
-            onSettings={() => setView("settings")}
-          />
-
-          {/* Hidden entirely when the machine has no Docker, Ollama or JVM
-              daemons — an empty panel would only be noise. */}
-          {runtimeDevices.length > 0 && (
+      <div className="shelf">
+        {/* Devices and AI tools share one panel and one strip: an emulator list
+            costs `simctl list` at 0.8s and the AI list costs a process walk, so
+            the tab that is not open is not fetched at all. */}
+        {(panels.devices || panels.ai) && (
+          <>
             <DevicePanel
-              title={t("devices.runtimes")}
-              devices={runtimeDevices}
+              title={t(toolTab === "ai" ? "ai.title" : "devices.title")}
+              tabs={toolTabs}
+              activeTab={toolTab}
+              onTab={(id) => setToolTab(id as "devices" | "ai")}
+              devices={toolTab === "ai" ? aiDevices : devices}
               busy={busy}
               run={run}
               ask={ask}
+              empty={t(toolTab === "ai" ? "ai.empty" : "devices.empty")}
               onSettings={() => setView("settings")}
             />
-          )}
-        </>
-      )}
 
-      {panels.system && (
-        <SystemPanel
-          stats={system}
-          showCpu={panels.cpu}
-          showGpu={panels.gpu}
-          showMemory={panels.memory}
-          showDisk={panels.disk}
-          onSettings={() => setView("settings")}
-        />
-      )}
+            {/* Hidden entirely when the machine has no Docker, Ollama or JVM
+                daemons — an empty panel would only be noise. */}
+            {toolTab === "devices" && runtimeDevices.length > 0 && (
+              <DevicePanel
+                title={t("devices.runtimes")}
+                devices={runtimeDevices}
+                busy={busy}
+                run={run}
+                ask={ask}
+                onSettings={() => setView("settings")}
+              />
+            )}
+          </>
+        )}
+
+        {panels.system && (
+          <SystemPanel
+            stats={system}
+            showCpu={panels.cpu}
+            showGpu={panels.gpu}
+            showMemory={panels.memory}
+            showDisk={panels.disk}
+            onSettings={() => setView("settings")}
+          />
+        )}
+      </div>
 
       <section className="panel panel--fill">
         <div className="panel__head panel__head--tools">
@@ -853,7 +965,7 @@ export default function App() {
                     `port:${proc.pid}`,
                     t("kill.titleOne", { name: proc.name }),
                     [proc],
-                    warningFor(proc.name),
+                    warningFor(proc.name, proc.ai),
                   )
                 }
               />
@@ -877,7 +989,7 @@ export default function App() {
                 `port:${proc.pid}`,
                 t("kill.titleOne", { name: proc.name }),
                 [proc],
-                warningFor(proc.name),
+                warningFor(proc.name, proc.ai),
               ).then(() => setDetailPid(null));
           }}
         />

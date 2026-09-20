@@ -424,7 +424,9 @@ body {
 
 .gauges {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(13rem, 100%), 1fr));
+  /* Two up rather than one on a narrow window: four stacked gauges are 200px
+     of masthead, and every one of those pixels comes off the port table. */
+  grid-template-columns: repeat(auto-fit, minmax(min(8rem, 100%), 1fr));
   gap: var(--space-xs);
   list-style: none;
   margin: 0;
@@ -567,9 +569,10 @@ body {
  */
 
 /* A platform's worth of devices. Ten of them is a scrollable block rather than
-   a panel that grows until the port table has nowhere left to go. */
+   a panel that grows until the port table has nowhere left to go — the `rem`
+   half of the cap is what holds on a short window, where 40vh is not much. */
 .panel--devices .panel__body {
-  max-block-size: 40vh;
+  max-block-size: min(32vh, 16rem);
   overflow-y: auto;
 }
 
@@ -663,6 +666,125 @@ body {
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
+  flex: 0 0 auto;
+}
+
+/* An AI tool is a dozen processes. The row opens onto them rather than either
+   hiding them or spilling twelve rows into the grid. */
+.device--open {
+  flex-wrap: wrap;
+}
+
+/* It has to look pressable before it is pressed: a bare caret beside a name
+   reads as decoration. The caret sits in its own bordered square, the whole
+   name is the target, and hover tints both. */
+.device__disclose {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  width: 100%;
+  min-width: 0;
+  margin-inline-start: calc(var(--space-2xs) * -1);
+  padding: var(--space-3xs) var(--space-2xs);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+
+.device__caret {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  border: var(--rule) solid var(--color-rule-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-paper);
+  font-size: 10px;
+  line-height: 1;
+  color: var(--color-ink-2);
+  transition: transform var(--dur-base) var(--ease-out);
+}
+
+.device--open .device__caret {
+  transform: rotate(90deg);
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+@media (hover: hover) {
+  .device__disclose:hover {
+    background: var(--color-accent-soft);
+  }
+
+  .device__disclose:hover .device__name {
+    color: var(--color-accent);
+  }
+
+  .device__disclose:hover .device__caret {
+    border-color: var(--color-accent);
+    color: var(--color-accent);
+  }
+}
+
+.device__members {
+  flex: 1 0 100%;
+  display: grid;
+  gap: var(--space-3xs);
+  max-block-size: 11rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  margin-block-start: var(--space-2xs);
+  padding-block-start: var(--space-2xs);
+  border-top: var(--rule) solid var(--color-rule);
+  list-style: none;
+}
+
+.device__members li {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2xs);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
+}
+
+/* A process name is machine text: bidi would otherwise reorder it. */
+.device__member-name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: ltr;
+  unicode-bidi: isolate;
+  color: var(--color-ink-2);
+}
+
+.device__member-pid,
+.device__member-mem {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ——— The shelf above the table ————————————————————————
+ * Devices, runtimes and the gauges. Fixed: it is the window's masthead, not a
+ * second scrolling region. Exactly one thing on this screen scrolls, and it is
+ * the port table — two nested scrollers meant the gauges were cut in half and
+ * neither scrollbar belonged to what you were pointing at.
+ *
+ * What keeps it from eating the table is the cap on the device list inside it,
+ * not a cap on the shelf.
+ */
+.shelf {
   flex: 0 0 auto;
 }
 
@@ -1024,6 +1146,18 @@ body {
   background: var(--color-accent-soft);
   font-size: var(--text-xs);
   color: var(--color-accent);
+}
+
+/* "Ollama", "vLLM", "Claude" — the AI tool behind a listener, when the machine
+   can say which. Set apart from the accent chips: this one is a fact about the
+   process, not a link. */
+.port__ai {
+  margin-inline-start: var(--space-2xs);
+  padding: 0 var(--space-3xs);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-xs);
+  color: var(--color-muted);
 }
 
 /* A child row is a process spawned by the row above it. */

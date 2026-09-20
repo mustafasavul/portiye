@@ -24,6 +24,8 @@ type Detail = {
   children: Relative[];
   open_files: number;
   files_sample: string[];
+  /** Weights the process holds open — the `.gguf` under an 18 GB python. */
+  model_files: string[];
   connections: string[];
   lsof_error: string | null;
 };
@@ -180,6 +182,24 @@ export function ProcessDetail({
                   <li key={`${c}-${i}`}>{c}</li>
                 ))}
               </ul>
+            )}
+
+            {/* Only when there are some: a "Model files: none" heading on every
+                ordinary process would be a row of noise on all of them. */}
+            {detail.model_files.length > 0 && (
+              <>
+                <h3 className="detail__section">
+                  {t("detail.models")}
+                  <span className="detail__count">
+                    {detail.model_files.length}
+                  </span>
+                </h3>
+                <ul className="mono-list">
+                  {detail.model_files.map((f) => (
+                    <li key={f}>{f}</li>
+                  ))}
+                </ul>
+              </>
             )}
 
             <h3 className="detail__section">

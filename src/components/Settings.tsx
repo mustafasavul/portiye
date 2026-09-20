@@ -53,6 +53,12 @@ export function Settings({
           checked={panels.devices}
           onChange={panel("devices")}
         />
+        <Switch
+          label={t("ai.title")}
+          hint={t("settings.aiHint")}
+          checked={panels.ai}
+          onChange={panel("ai")}
+        />
         {/* The one switch that clears all four gauges at once — the individual
             ones below stay where they are. */}
         <Switch

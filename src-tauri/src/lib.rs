@@ -1,3 +1,4 @@
+mod ai;
 mod avd;
 mod export;
 mod gpu;
@@ -47,6 +48,7 @@ pub fn run() {
             sim::restart_simulator,
             export::export_snapshot,
             export::export_logs,
+            ai::list_ai_tools,
             runtimes::list_runtimes,
             runtimes::runtime_action,
             i18n::set_locale,

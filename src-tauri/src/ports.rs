@@ -40,6 +40,9 @@ pub struct PortEntry {
     /// Bound to something other than loopback, so a phone on the same Wi-Fi can
     /// reach it at `http://<lan ip>:<port>`. A `127.0.0.1`-only server cannot.
     pub lan: bool,
+    /// The AI tool behind this listener — "Ollama", "vLLM", "Claude" — or
+    /// `None` when nothing identifies one. See `ai_for`.
+    pub ai: Option<String>,
 }
 
 /// Is a listening address reachable from the rest of the network? Everything
@@ -272,12 +275,14 @@ pub fn scan(sys: &mut System) -> Result<Vec<PortEntry>, String> {
             let cwd = proc
                 .and_then(|p| p.cwd())
                 .map(|c| c.to_string_lossy().into_owned());
+            let name = proc
+                .map(|p| p.name().to_string_lossy().into_owned())
+                .unwrap_or_else(|| "unknown".into());
             PortEntry {
                 pid,
                 port,
-                name: proc
-                    .map(|p| p.name().to_string_lossy().into_owned())
-                    .unwrap_or_else(|| "unknown".into()),
+                ai: crate::ai::label_for(&argv, &name, cwd.as_deref(), port),
+                name,
                 detail: detail_for(&argv, cwd.as_deref(), home.as_deref()),
                 memory: proc.map(|p| p.memory()).unwrap_or(0),
                 cpu: proc.map(|p| p.cpu_usage()).unwrap_or(0.0),

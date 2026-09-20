@@ -12,7 +12,7 @@ Windows.
 ```bash
 npm run tauri dev          # the real app (WKWebView on macOS)
 npm run build              # tsc + vite
-cd src-tauri && cargo test # 38 tests (36 on Windows — two need a unix fixture)
+cd src-tauri && cargo test # 43 tests (41 on Windows — two need a unix fixture)
 npm run check              # locale keys, placeholders, version triple
 ```
 
@@ -145,6 +145,58 @@ if per-item stats are ever wanted, not the emulator rows. `get_system_stats`
 reads the poller's own `System`, because a fresh `System::new_all()` always
 reports 0% CPU. Disks are enumerated per call instead: a `statfs` per mount is
 cheap, unlike the `simctl`/`docker` subprocesses that forced the device split.
+
+**AI tools are named from the outside, never by probing.** A process is
+labelled "Ollama", "vLLM", "Claude", "Codex" from three things already at hand:
+argv, the directory it was started in, and the handful of ports a tool always
+binds (`ai.rs`). One guard runs in front of the tables — nothing under
+`/System/`, `/usr/libexec/`, systemd or `C:\Windows\` is ever an AI tool,
+because macOS ships a `CursorUIViewService` and a cryptex path with "codex" in
+it, and tuning a needle per false positive is how a table rots. What it deliberately does *not*
+do is read memory maps — `vmmap`, `/proc/pid/maps` and `Get-Process -Modules`
+would also catch an unnamed `python` that loaded CUDA or Metal, but that is a
+subprocess or a privileged read *per pid, per tick*: the same cost that forced
+the device split. Anything less certain gets no badge, for the reason a missing
+gauge beats an invented one.
+
+**Devices and AI tools are one panel with a strip, and the closed tab is not
+fetched.** Not a display trick: `simctl list` is 0.8s and the device lists are
+three subprocesses, so a tab nobody opened runs nothing at all. The tray's
+device submenu still forces the device fetch — it is a second consumer, not a
+second poller — and switching tabs leaves the other list in state rather than
+clearing it, or the Device Logs tab would lose its picker mid-session.
+
+**One scroller on the screen, and it is the port table.** Devices, runtimes and
+the gauges sit in a fixed `.shelf` above it. A shelf that scrolled *itself* was
+tried and is wrong: it cut the gauges in half and put two scrollbars on one
+screen, neither of them belonging to what you were pointing at. What keeps the
+shelf from eating the table is size, not scrolling — the device list is capped
+at `min(32vh, 16rem)` and the gauges pack two-up below 13rem of width, so at
+320 x 600 the table still gets ~90px and the window itself never scrolls. Any
+new panel above the table belongs in the shelf, and pays for itself in pixels
+the table gives up.
+
+**An agent has no port, so it gets a panel, not a row.** Codex, Claude Code and
+most assistants never listen on anything: they hold one outbound TLS connection
+and fork `git` / `rg` / compilers. The port table can therefore never show
+them, which is what the AI tools panel is for — one row per *tool*, not per
+process, since Codex alone is twenty Electron helpers. It costs no subprocess:
+`list_ai_tools` walks the poller's own `System`, which is also the only one
+whose CPU percentages are real. Stopping a row goes through `killMany` like
+every other kill, so the confirmation, the child sweep and the elevated retry
+cannot drift apart from the rest of the app. A row opens onto the processes
+behind it — twenty Electron helpers listed where they can be read, rather than
+twenty rows in the grid.
+
+Two consequences worth keeping. A coding agent runs as plain `node` or
+`python`, so `risk.ts` cannot find it by name — `warningFor` takes the label as
+a second argument and warns before "kill all node" ends a half-finished agent
+run. And the network side of the same question is *not* implemented: `lsof -nP`
+reports addresses, not SNI, and the reverse DNS of an inference endpoint is
+whichever CDN fronts it, so "talks to api.anthropic.com" would be a guess
+wearing a fact's clothes. Model weights are the honest local equivalent — the
+detail panel picks `.gguf` / `.safetensors` / `.onnx` out of the `lsof -p` it
+already runs, which is what explains an 18 GB `python`.
 
 **A lister returns an empty list, never `Err`, when its toolchain is absent.**
 No Xcode, no Android SDK, no Docker — that is not a fault, it is a machine.

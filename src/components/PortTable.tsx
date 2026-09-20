@@ -231,6 +231,10 @@ function ProcRow({
               </span>
             )}
             {proc.name}
+            {/* Named only when something on the machine actually says so —
+                argv, the project directory, or a port the tool always binds.
+                No badge is the honest answer for everything else. */}
+            {proc.ai && <span className="port__ai">{proc.ai}</span>}
           </span>
           {proc.detail && (
             <span className="port__detail" title={proc.detail}>

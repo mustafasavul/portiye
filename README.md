@@ -85,6 +85,20 @@ running from yesterday.
 - **Emulators, simulators, containers, daemons.** Android AVDs, iOS
   simulators, Docker containers, Ollama models and JVM build daemons: start,
   stop, restart, wipe.
+- **Names the AI tools behind the ports.** Ollama, llama.cpp, LM Studio, vLLM,
+  ComfyUI, Stable Diffusion WebUI, an MCP server, Claude, Codex, Antigravity,
+  Cursor, Copilot — each listening process carries its tool's name. Read off
+  argv, the project directory or a port the tool always binds; never by reading
+  a process's memory, and never a guess.
+- **An AI tools panel for the ones with no port at all.** Coding agents hold an
+  outbound connection and fork `git`, `rg` and compilers — nothing listens, so
+  nothing shows in a port list. This panel lists one row per tool: agent or
+  local model, how many processes, how much memory, and the ports if there are
+  any. Open a row to see every process behind it; stop it and they all go, with
+  a warning first if an agent is mid-task. It shares a tab strip with Devices,
+  and the tab you are not looking at is never scanned.
+- **Model weights.** The `.gguf` / `.safetensors` / `.onnx` files a process
+  holds open, in its detail panel — what explains an 18 GB `python`.
 - **Live device logs.** `simctl log stream` and `adb logcat`, filtered,
   copyable, exportable.
 - **Export.** JSON or CSV snapshot of what is listening, to `~/Downloads`.

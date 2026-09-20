@@ -36,6 +36,9 @@ pub struct ProcessDetail {
     pub open_files: usize,
     /// A readable sample, not the whole table — a browser holds thousands.
     pub files_sample: Vec<String>,
+    /// Model weights this process has open, picked out of the same table. A
+    /// `python` holding 18 GB is a mystery until you see the `.gguf` under it.
+    pub model_files: Vec<String>,
     pub connections: Vec<String>,
     /// Set when `lsof` is missing or refused; the panel says so rather than
     /// showing an empty list that looks like "no connections".
@@ -89,6 +92,28 @@ fn lsof_for(pid: u32) -> Result<(Vec<String>, Vec<String>), String> {
         }
     }
     Ok((files, conns))
+}
+
+/// Model weights, by the extensions the formats actually use. The runners
+/// `mmap` these rather than reading them, so they sit in the open-file table
+/// for as long as the model is loaded — which is what makes them findable
+/// without reading anyone's memory map.
+///
+/// `.bin` is deliberately absent: half the files on a machine end in it, and a
+/// wrong answer here reads as "this is an AI process" about a process that is
+/// not one.
+const MODEL_EXT: [&str; 6] = [".gguf", ".safetensors", ".onnx", ".pt", ".pth", ".mlmodelc"];
+
+fn model_files(files: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for f in files {
+        let lower = f.to_ascii_lowercase();
+        if MODEL_EXT.iter().any(|ext| lower.ends_with(ext)) && !out.contains(f) {
+            out.push(f.clone());
+        }
+    }
+    out.truncate(10);
+    out
 }
 
 #[tauri::command]
@@ -177,8 +202,38 @@ pub fn process_detail(pid: u32) -> Result<ProcessDetail, String> {
         ancestors,
         children,
         open_files: files.len(),
+        model_files: model_files(&files),
         files_sample: files.into_iter().take(20).collect(),
         connections,
         lsof_error,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn picks_out_model_weights_and_nothing_else() {
+        let files: Vec<String> = [
+            "/Users/me/.ollama/models/blobs/sha256-abc.gguf",
+            "/Users/me/.ollama/models/blobs/sha256-abc.gguf", // mapped twice
+            "/opt/models/sd-xl.safetensors",
+            "/Applications/Thing.app/Contents/Resources/data.bin",
+            "/usr/lib/libsystem.dylib",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+
+        assert_eq!(
+            model_files(&files),
+            vec![
+                "/Users/me/.ollama/models/blobs/sha256-abc.gguf",
+                "/opt/models/sd-xl.safetensors",
+            ],
+            "deduped, and a .bin resource is not a model"
+        );
+        assert!(model_files(&[]).is_empty());
+    }
 }

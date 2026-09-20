@@ -36,7 +36,32 @@ const RULES: { match: RegExp; warning: Key }[] = [
   },
 ];
 
-/** The warning key for a process name, or null when it is ordinary dev noise. */
-export function warningFor(name: string): Key | null {
-  return RULES.find((r) => r.match.test(name))?.warning ?? null;
+/**
+ * Coding agents work through a `node` or `python` process, so no name rule can
+ * find them — the label the scan already worked out is the only handle there
+ * is. An agent killed mid-run leaves its edits half applied, which is why
+ * "kill all node" must say so first. Local inference servers are deliberately
+ * absent: stopping Ollama frees the GPU and loses nothing.
+ */
+const AGENTS = new Set([
+  "Claude",
+  "Codex",
+  "Antigravity",
+  "Windsurf",
+  "Cursor",
+  "Aider",
+  "Copilot",
+  "MCP server",
+]);
+
+/**
+ * The warning key for a process, or null when it is ordinary dev noise.
+ * `ai` is the label from the port scan, where there is one.
+ */
+export function warningFor(name: string, ai?: string | null): Key | null {
+  // The name rules come first: they know the consequence exactly, and an IDE
+  // that hosts an agent is still an IDE with unsaved buffers in it.
+  const named = RULES.find((r) => r.match.test(name))?.warning;
+  if (named) return named;
+  return ai && AGENTS.has(ai) ? "risk.agent" : null;
 }

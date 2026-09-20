@@ -78,6 +78,8 @@ export const en = {
     "Nest each process under whatever started it. Off, every process gets its own row — nothing is hidden.",
   "settings.open": "Settings",
   "settings.panels": "Panels",
+  "settings.aiHint":
+    "Agents and local model servers, whether or not they listen on a port.",
   "settings.devicesHint": "Emulators, simulators and containers.",
   "settings.systemHint": "All four gauges at once.",
   "settings.columns": "Columns and gauges",
@@ -172,6 +174,7 @@ export const en = {
   "detail.connections": "Connections",
   "detail.noSockets": "No open sockets.",
   "detail.openFiles": "Open files",
+  "detail.models": "Model files",
   "detail.noFiles": "No regular files open.",
   "detail.andMore": "and {n} more",
   "detail.kill": "Kill this process",
@@ -192,6 +195,15 @@ export const en = {
   "logs.emptyNoDevice": "Start a simulator or emulator to stream its log.",
   "logs.emptyPick": "Pick a device above to start streaming.",
 
+  "ai.title": "AI tools",
+  "ai.agent": "Agent",
+  "ai.model": "Local model",
+  "ai.processes": "{n} processes",
+  "ai.oneProcess": "1 process",
+  "ai.empty": "No AI tool is running.",
+  "ai.showProcesses": "Show its processes",
+  "ai.stopTitle": "Stop {name}?",
+
   "risk.database":
     "This is a database or message broker. Killing it mid-write can lose or corrupt uncommitted data — stop it through its own service manager instead.",
   "risk.editor":
@@ -202,6 +214,8 @@ export const en = {
     "This hosts containers or virtual machines. Everything running inside it goes down too.",
   "risk.device":
     "This backs a running emulator or simulator. The device session ends and unsaved app state is lost.",
+  "risk.agent":
+    "A coding agent is running here. Killing it mid-task leaves its edits half applied and its session gone.",
 };
 
 /** Every string the app can show. */

@@ -74,6 +74,8 @@ export const tr: Strings = {
     "Her süreci kendisini başlatanın altında grupla. Kapalıyken her süreç kendi satırında görünür — hiçbiri gizlenmez.",
   "settings.open": "Ayarlar",
   "settings.panels": "Paneller",
+  "settings.aiHint":
+    "Ajanlar ve yerel model sunucuları — port dinleseler de dinlemeseler de.",
   "settings.devicesHint": "Emülatörler, simülatörler ve konteynerler.",
   "settings.systemHint": "Dört göstergenin tamamı.",
   "settings.columns": "Sütunlar ve göstergeler",
@@ -168,6 +170,7 @@ export const tr: Strings = {
   "detail.connections": "Bağlantılar",
   "detail.noSockets": "Açık soket yok.",
   "detail.openFiles": "Açık dosyalar",
+  "detail.models": "Model dosyaları",
   "detail.noFiles": "Açık normal dosya yok.",
   "detail.andMore": "ve {n} tane daha",
   "detail.kill": "Bu süreci sonlandır",
@@ -188,6 +191,15 @@ export const tr: Strings = {
     "Kaydını akıtmak için bir simülatör veya emülatör başlatın.",
   "logs.emptyPick": "Akışı başlatmak için yukarıdan bir cihaz seçin.",
 
+  "ai.title": "AI araçları",
+  "ai.agent": "Ajan",
+  "ai.model": "Yerel model",
+  "ai.processes": "{n} süreç",
+  "ai.oneProcess": "1 süreç",
+  "ai.empty": "Çalışan AI aracı yok.",
+  "ai.showProcesses": "Süreçlerini göster",
+  "ai.stopTitle": "{name} durdurulsun mu?",
+
   "risk.database":
     "Bu bir veritabanı veya mesaj aracısı. Yazma sırasında sonlandırmak, işlenmemiş verileri kaybettirebilir veya bozabilir — bunun yerine kendi servis yöneticisinden durdurun.",
   "risk.editor":
@@ -198,6 +210,8 @@ export const tr: Strings = {
     "Bu, konteynerleri veya sanal makineleri barındırıyor. İçinde çalışan her şey de kapanır.",
   "risk.device":
     "Bu, çalışan bir emülatör veya simülatörü besliyor. Cihaz oturumu biter ve kaydedilmemiş uygulama durumu kaybolur.",
+  "risk.agent":
+    "Burada bir kodlama ajanı çalışıyor. Görev sırasında sonlandırmak, düzenlemelerini yarım bırakır ve oturumunu yok eder.",
 
   "settings.memoryHint": "Bellek sütununu ve göstergesini gizler. İkisi de tarama sırasında okunur.",
 };

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useT } from "../i18n";
 import { SettingsButton } from "./SettingsButton";
 import type { Ask } from "../Confirm";
+import { mb } from "../types";
 import type { Device } from "../types";
 
 /** A titled list of devices — emulators, runtimes, anything row-shaped. */
@@ -12,6 +14,9 @@ export function DevicePanel({
   ask,
   empty,
   onSettings,
+  tabs,
+  activeTab,
+  onTab,
 }: {
   title: string;
   devices: Device[];
@@ -21,6 +26,12 @@ export function DevicePanel({
   empty?: string;
   /** Opens the settings view, where this panel can be switched off. */
   onSettings: () => void;
+  /** Two or more lists sharing this panel — Devices and AI tools. The strip
+   *  replaces the heading, and only the selected list is ever fetched, so an
+   *  unopened tab costs nothing. One tab alone is a heading, not a strip. */
+  tabs?: { id: string; label: string }[];
+  activeTab?: string;
+  onTab?: (id: string) => void;
 }) {
   const t = useT();
   const running = devices.filter((d) => d.running).length;
@@ -41,9 +52,26 @@ export function DevicePanel({
   groups.sort((a, b) => a[0].localeCompare(b[0]));
 
   return (
-    <section className="panel panel--devices">
+    <section className="panel panel--devices" aria-label={title}>
       <div className="panel__head">
-        <h2 className="panel__title">{title}</h2>
+        {tabs && tabs.length > 1 ? (
+          <div className="tabs" role="tablist" aria-label={title}>
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                role="tab"
+                className="tab"
+                aria-selected={tab.id === activeTab}
+                data-active={tab.id === activeTab || undefined}
+                onClick={() => onTab?.(tab.id)}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <h2 className="panel__title">{title}</h2>
+        )}
         <span className="panel__count">
           {t("devices.count", { running, total: devices.length })}
         </span>
@@ -108,16 +136,47 @@ function DeviceRow({
   onReset: () => void;
 }) {
   const t = useT();
+  // One tool is a dozen processes; the row states how many and opens onto
+  // which, rather than either hiding them or spilling twelve rows per tool.
+  const [open, setOpen] = useState(false);
+  const members = device.members ?? [];
+
   return (
-    <li className={device.running ? "device device--live" : "device"}>
+    <li
+      className={[
+        "device",
+        device.running && "device--live",
+        open && "device--open",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <span
         className={device.running ? "dot dot--live" : "dot"}
         aria-hidden="true"
       />
       <span className="device__text">
-        <span className="device__name" title={device.name}>
-          {device.name}
-        </span>
+        {members.length > 0 ? (
+          <button
+            className="device__disclose"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+            title={t("ai.showProcesses")}
+          >
+            {/* One caret, rotated by CSS — an open row turns it rather than
+                swapping it for a different glyph. */}
+            <span className="device__caret" aria-hidden="true">
+              ▸
+            </span>
+            <span className="device__name" title={device.name}>
+              {device.name}
+            </span>
+          </button>
+        ) : (
+          <span className="device__name" title={device.name}>
+            {device.name}
+          </span>
+        )}
         <span className="device__meta">
           {device.platform}
           <span aria-hidden="true">·</span>
@@ -158,6 +217,19 @@ function DeviceRow({
           </button>
         )}
       </span>
+      {open && members.length > 0 && (
+        <ul className="device__members">
+          {members.map((m) => (
+            <li key={m.pid}>
+              <span className="device__member-name" title={m.name}>
+                {m.name}
+              </span>
+              <span className="device__member-pid">{m.pid}</span>
+              <span className="device__member-mem">{mb(m.memory)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </li>
   );
 }

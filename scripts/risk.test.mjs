@@ -115,9 +115,24 @@ check("matching is anchored to the start of the name", () => {
 
 // A key with a typo is worse than a missing warning: `t()` falls through to the
 // raw key, so the dialog would show the literal text "risk.databse".
+// A coding agent hides behind `node` or `python`, so only the label the port
+// scan worked out can find it — and "kill all node" is exactly the gesture
+// that would otherwise take it down without a word.
+check("an agent is found by its label, not its process name", () => {
+  assert.equal(warningFor("node", "Claude"), "risk.agent");
+  assert.equal(warningFor("python3", "Codex"), "risk.agent");
+  // Stopping a local model server frees the GPU and loses nothing.
+  assert.equal(warningFor("node", "Ollama"), null);
+  assert.equal(warningFor("node", null), null);
+  // A name rule knows the consequence exactly, so it wins over the label:
+  // the IDE hosting an agent still has unsaved buffers in it.
+  assert.equal(warningFor("Cursor", "Cursor"), "risk.editor");
+  assert.equal(warningFor("postgres", "Claude"), "risk.database");
+});
+
 check("every warning key exists in en.ts", () => {
   const en = readFileSync(new URL("../src/locales/en.ts", import.meta.url), "utf8");
-  for (const key of new Set(DANGEROUS.map(([, k]) => k)))
+  for (const key of new Set([...DANGEROUS.map(([, k]) => k), "risk.agent"]))
     assert.ok(en.includes(`"${key}":`), `${key} is missing from en.ts`);
 });
 
