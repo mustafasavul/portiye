@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/ports-light.png" alt="The Ports tab: devices, system gauges, and every listening port with the process and project behind it" width="900">
+  <img src="docs/ports-light.jpeg" alt="The Ports tab: the Devices / AI tools strip, the system gauges, and every listening port with the process and project behind it" width="900">
 </p>
 
 **portiye is a free, open-source, cross-platform desktop app that shows every
@@ -67,7 +67,7 @@ running from yesterday.
 - **Says who owns it.** The `.app` bundle, the AVD, or the project directory a
   process was started from. `~/dev/shop` beats a bare `node`.
 
-  <img src="docs/ports-dark.png" alt="Ports nested under the process that started them: an IDE, its language servers and its helper, each on its own port" width="900">
+  <img src="docs/ports-dark.jpeg" alt="The same window in dark mode: each port named by its owner — the project an adb was started in, postgres's data directory, an IDE helper" width="900">
 
 - **Fast Kill.** One click clears every stray `node`, `python`, JVM, .NET, Go,
   Ruby, PHP, Rust or Dart process, with a confirmation that names each one.
@@ -97,6 +97,8 @@ running from yesterday.
   any. Open a row to see every process behind it; stop it and they all go, with
   a warning first if an agent is mid-task. It shares a tab strip with Devices,
   and the tab you are not looking at is never scanned.
+
+  <img src="docs/ports-dark-ai-tools.jpeg" alt="The AI tools tab: Claude, Antigravity, Cursor, Codex and Copilot, each with its process count, memory and a Stop button, above the listening ports" width="900">
 - **Model weights.** The `.gguf` / `.safetensors` / `.onnx` files a process
   holds open, in its detail panel — what explains an 18 GB `python`.
 - **Live device logs.** `simctl log stream` and `adb logcat`, filtered,
@@ -114,7 +116,7 @@ into families, and the devices are all reachable — and killable — without
 opening anything.
 
 <p align="center">
-  <img src="docs/tray.png" alt="The menu bar menu: a one-line CPU, GPU, RAM and disk readout above the ports and devices submenus" width="420">
+  <img src="docs/tray.jpeg" alt="The menu bar menu: a one-line CPU, GPU, RAM and disk readout above the ports and devices submenus" width="420">
 </p>
 
 ### Everything can be switched off
